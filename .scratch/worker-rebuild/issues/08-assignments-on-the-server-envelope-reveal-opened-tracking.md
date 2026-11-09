@@ -6,14 +6,14 @@ Key derivation per ADR 0003: assignment key = HKDF(eventKey, participantToken).
 
 **Blocked by:** 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#8
 
-- [ ] Draw writes one encrypted assignment per giver under the organizer token; participant with their link decrypts theirs; another participant's link cannot
-- [ ] Participant page after Yes: envelope opens, receiver name shown; `openedAt` set via participant token
-- [ ] If the assignment changed since last opened, a "this changed" banner shows
-- [ ] Organizer: opened count visible; re-draw shows a warning naming how many have opened
-- [ ] Pairings table hidden by default; "Reveal pairings" toggle shows table + CSV export
-- [ ] Adding a participant after a draw mints their link immediately and flags the draw as stale (existing warning)
-- [ ] Tests: wrong token cannot decrypt, server stores only ciphertext and timestamps
+- [x] Draw writes one encrypted assignment per giver under the organizer token; participant with their link decrypts theirs; another participant's link cannot
+- [x] Participant page after Yes: envelope opens, receiver name shown; `openedAt` set via participant token
+- [x] If the assignment changed since last opened, a "this changed" banner shows
+- [x] Organizer: opened count visible; re-draw shows a warning naming how many have opened
+- [x] Pairings table hidden by default; "Reveal pairings" toggle shows table + CSV export
+- [x] Adding a participant after a draw mints their link immediately and flags the draw as stale (existing warning)
+- [x] Tests: wrong token cannot decrypt, server stores only ciphertext and timestamps
