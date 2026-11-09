@@ -19,3 +19,7 @@ Server never sees plaintext (ADR 0002). Current "Additional instructions" become
 - [x] Home page lists local events (title, date created), "Copy organizer link" per event, "New event"
 - [x] Participant names never appear in any request body or URL in plaintext
 - [x] Worker route logic covered by Vitest
+
+## Comments
+
+Review (2026-11-09): the separate details and roster routes were removed; details, roster and participant token hashes travel together in `PUT /api/events/:id` and come back from `GET /api/events/:id`, as the spec's API list has it. The roster record also carries a third ciphertext, `organizerOnly` (participant tokens and rules), sealed with HKDF(eventKey, organizerToken, "organizer") so that only the organizer link can re-derive every participant's link on another device; the spec's server-data list does not mention it. The 13-month expiry now applies to every entry of the event (wishlists and assignments included) and moves on every organizer write; entries of a participant the roster drops are removed on that write.

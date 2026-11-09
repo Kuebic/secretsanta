@@ -13,3 +13,7 @@
 - [x] Random choice uses `crypto.getRandomValues`, not `Math.random`
 - [x] Property-based tests cover: every participant gives once and receives once, nobody receives from themselves, all rules honoured, feasible-but-tight constraints (e.g. chain of Must Not rules) always solve
 - [x] Existing generator tests still pass
+
+## Comments
+
+Review (2026-11-09): the generator is a search over candidate receivers, most-constrained giver first, that restores its state and tries the next candidate when a choice cannot be completed; feasibility of the remaining roster is checked with an augmenting-path matching rather than by exhaustive backtracking, so adversarial rule sets cannot take exponential time. Outcomes match the spec: every feasible rule set solves, infeasible ones return `null`, every random choice uses `crypto.getRandomValues`.

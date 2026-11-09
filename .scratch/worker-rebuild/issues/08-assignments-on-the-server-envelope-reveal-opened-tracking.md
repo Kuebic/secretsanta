@@ -17,3 +17,7 @@ Key derivation per ADR 0003: assignment key = HKDF(eventKey, participantToken).
 - [x] Pairings table hidden by default; "Reveal pairings" toggle shows table + CSV export
 - [x] Adding a participant after a draw mints their link immediately and flags the draw as stale (existing warning)
 - [x] Tests: wrong token cannot decrypt, server stores only ciphertext and timestamps
+
+## Comments
+
+Review (2026-11-09): besides `openedAt`, the Worker keeps a plaintext `assignedAt` in the assignment's KV metadata (moved only when the giver's ciphertext changes) so the "this changed" banner can be computed; both are timing only (ADR 0002). A giver counts as opened, in the opened count, the re-draw warning and the status table, only when nothing was re-drawn for them since they opened.
