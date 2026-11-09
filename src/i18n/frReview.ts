@@ -20,7 +20,7 @@ export const frAwaitingNativeReview: readonly string[] = [
   'rules.organizersNoteLabel',
   'rules.organizersNotePlaceholder',
   'rules.mutualExclusion',
-  'rules.mutualExclusionBlocked',
+  'rules.mutualExclusionUnavailable',
   'rules.mutualExclusionRemovePrompt',
   'rules.mutualExclusionRemoveOneSide',
   'rules.mutualExclusionRemoveBothSides',

@@ -11,7 +11,7 @@ const byName = (participants: Record<string, { id: string; name: string }>, name
   Object.values(participants).find(p => p.name === name)!.id;
 
 describe('legacy migration mapping', () => {
-  it('carries participants over with fresh IDs, rules re-pointed and hints as organizer\'s notes', () => {
+  it('carries participants over with fresh IDs, rules re-pointed and the stored hint field as the Organizer\'s note', () => {
     const event = mapLegacyData({
       participants: {
         'uuid-a': { id: 'uuid-a', name: 'Alice', hint: 'Likes tea', rules: [{ type: 'mustNot', targetParticipantId: 'uuid-b' }] },

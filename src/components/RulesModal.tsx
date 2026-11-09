@@ -201,18 +201,18 @@ export function RulesModal({
               </button>
             </div>
             {rule.type === 'mustNot' && (() => {
-              const blocked = rule.targetParticipantId !== '' && hasReverseMust(rule.targetParticipantId);
+              const unavailable = rule.targetParticipantId !== '' && hasReverseMust(rule.targetParticipantId);
               return (
-                <label className={`flex items-center gap-2 text-sm pl-1 ${blocked ? 'text-gray-400' : 'text-gray-700'}`}>
+                <label className={`flex items-center gap-2 text-sm pl-1 ${unavailable ? 'text-gray-400' : 'text-gray-700'}`}>
                   <input
                     type="checkbox"
                     role="switch"
-                    checked={rule.bothWays && !blocked}
-                    disabled={blocked}
+                    checked={rule.bothWays && !unavailable}
+                    disabled={unavailable}
                     onChange={(e) => setBothWays(index, e.target.checked)}
                   />
-                  {blocked
-                    ? t('rules.mutualExclusionBlocked', { other: participants[rule.targetParticipantId]?.name ?? '' })
+                  {unavailable
+                    ? t('rules.mutualExclusionUnavailable', { other: participants[rule.targetParticipantId]?.name ?? '' })
                     : t('rules.mutualExclusion')}
                 </label>
               );

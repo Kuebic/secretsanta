@@ -18,7 +18,7 @@ interface DrawSectionProps {
   onDraw: () => void;
 }
 
-// The organizer runs the draw here. Pairings stay hidden until asked for, so
+// The organizer runs the draw here. Assignments stay hidden until asked for, so
 // an organizer who is also a participant is not spoiled.
 export function DrawSection({ participants, draw, status, isDrawing, canDraw, errorKey, onDraw }: DrawSectionProps) {
   const { t } = useTranslation();
@@ -28,12 +28,12 @@ export function DrawSection({ participants, draw, status, isDrawing, canDraw, er
   const opened = countOpened(Object.keys(participants), status);
 
   const name = (id: string) => participants[id]?.name ?? '?';
-  const pairings = Object.entries(draw.receivers)
+  const assignments = Object.entries(draw.receivers)
     .map(([giverId, receiverId]): [string, string] => [name(giverId), name(receiverId)])
     .sort((a, b) => a[0].localeCompare(b[0]));
 
   const handleExportCSV = () => {
-    const url = window.URL.createObjectURL(new Blob([generateCSV(pairings)], { type: 'text/csv' }));
+    const url = window.URL.createObjectURL(new Blob([generateCSV(assignments)], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;
     a.download = 'secret-santa-assignments.csv';
@@ -79,7 +79,7 @@ export function DrawSection({ participants, draw, status, isDrawing, canDraw, er
             className="w-full p-2 border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center gap-2"
           >
             {isRevealed ? <EyeSlash size={20} weight="bold" /> : <Eye size={20} weight="bold" />}
-            {t(isRevealed ? 'draw.hidePairings' : 'draw.revealPairings')}
+            {t(isRevealed ? 'draw.hideAssignments' : 'draw.revealAssignments')}
           </button>
           {isRevealed ? (
             <div className="p-4 bg-gray-50 rounded-lg space-y-3">
@@ -91,7 +91,7 @@ export function DrawSection({ participants, draw, status, isDrawing, canDraw, er
                   </tr>
                 </thead>
                 <tbody>
-                  {pairings.map(([giver, receiver]) => (
+                  {assignments.map(([giver, receiver]) => (
                     <tr key={giver}>
                       <td className="py-1 pr-2 break-words">{giver}</td>
                       <td className="py-1 break-words">{receiver}</td>
@@ -109,7 +109,7 @@ export function DrawSection({ participants, draw, status, isDrawing, canDraw, er
               </button>
             </div>
           ) : (
-            <p className="text-xs text-gray-500">{t('draw.pairingsHidden')}</p>
+            <p className="text-xs text-gray-500">{t('draw.assignmentsHidden')}</p>
           )}
         </div>
       )}

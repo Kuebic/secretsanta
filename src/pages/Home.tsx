@@ -138,7 +138,7 @@ export function Home() {
             {t(isCreating ? 'events.creating' : 'events.newEvent')}
           </button>
 
-          <p className="text-xs text-gray-500">{t('events.keepLinkHint')}</p>
+          <p className="text-xs text-gray-500">{t('events.keepLinkWarning')}</p>
         </div>
       </Layout>
     </PageTransition>

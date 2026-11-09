@@ -180,8 +180,8 @@ export function OrganizerEvent() {
       setDrawErrorKey('errors.needMoreParticipants');
       return;
     }
-    const pairs = generatePairs(content.participants);
-    if (!pairs) {
+    const generated = generatePairs(content.participants);
+    if (!generated) {
       setDrawErrorKey('errors.invalidPairs');
       return;
     }
@@ -189,7 +189,7 @@ export function OrganizerEvent() {
     if (hasDraw(draw) && openedCount > 0 && !window.confirm(t('draw.redrawConfirm', { count: openedCount }))) {
       return;
     }
-    const receivers = Object.fromEntries(pairs.pairings.map(({ giver, receiver }) => [giver.id, receiver.id]));
+    const receivers = Object.fromEntries(generated.pairings.map(({ giver, receiver }) => [giver.id, receiver.id]));
     setIsDrawing(true);
     try {
       const next = await sealDraw(credentials.eventKey, content.participantTokens, receivers, draw);
