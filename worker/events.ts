@@ -251,6 +251,15 @@ async function getEvent(env: Env, id: string): Promise<Response> {
   });
 }
 
+// The organizer's status table: per-participant timing only, behind the
+// organizer token.
+async function getStatus(request: Request, env: Env, id: string): Promise<Response> {
+  const meta = await requireEvent(env, id);
+  await authorizeOrganizer(request, meta);
+  const { roster } = await readStored(env, id);
+  return json({ status: await readStatus(env, id, roster) });
+}
+
 async function putDetails(request: Request, env: Env, id: string): Promise<Response> {
   const meta = await requireEvent(env, id);
   await authorizeOrganizer(request, meta);
@@ -432,6 +441,8 @@ export async function handleEvents(request: Request, env: Env, path: string[]): 
         return await putRoster(request, env, id);
       case 'GET roster':
         return await getRoster(env, id);
+      case 'GET status':
+        return await getStatus(request, env, id);
       case 'PUT assignments':
         return await putAssignments(request, env, id);
     }

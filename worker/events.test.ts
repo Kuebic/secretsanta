@@ -524,3 +524,34 @@ describe('events API: wishlists', () => {
     expect((await call('GET', wishlistPath(P1))).status).toBe(404);
   });
 });
+
+describe('events API: organizer status', () => {
+  const statusPath = `/api/events/${EVENT_ID}/status`;
+
+  it('lists every participant\'s wishlistUpdatedAt and openedAt in one call with the organizer token', async () => {
+    await createEvent();
+    const saved = await (await call('PUT', `/api/events/${EVENT_ID}/participants/${P2}/wishlist`, { token: 't2', body: { wishlist: blob(64, 'W') } })).json();
+    await call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } } });
+    const opened = await (await call('POST', `/api/events/${EVENT_ID}/participants/${P1}/opened`, { token: 't1' })).json();
+
+    const response = await call('GET', statusPath, { token: ORGANIZER_TOKEN });
+    expect(response.status).toBe(200);
+    const { status } = await response.json();
+    expect(Object.keys(status).sort()).toEqual([P1, P2].sort());
+    expect(status[P1].openedAt).toBe(opened.openedAt);
+    expect(status[P1].wishlistUpdatedAt).toBeUndefined();
+    expect(status[P2].wishlistUpdatedAt).toBe(saved.wishlistUpdatedAt);
+    expect(status[P2].openedAt).toBeUndefined();
+  });
+
+  it('refuses the status listing with a participant token, a wrong token, or no token', async () => {
+    await createEvent();
+    expect((await call('GET', statusPath, { token: 't1' })).status).toBe(403);
+    expect((await call('GET', statusPath, { token: OTHER_TOKEN })).status).toBe(403);
+    expect((await call('GET', statusPath)).status).toBe(401);
+  });
+
+  it('answers 404 for the status of an unknown event', async () => {
+    expect((await call('GET', statusPath, { token: ORGANIZER_TOKEN })).status).toBe(404);
+  });
+});
