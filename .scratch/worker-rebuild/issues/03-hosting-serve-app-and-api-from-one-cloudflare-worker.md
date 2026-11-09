@@ -6,15 +6,15 @@ See ADR 0001.
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#3
 
-- [ ] `worker/` directory with a plain fetch handler: `/api/health` returns JSON, everything else falls through to static assets with SPA fallback
-- [ ] wrangler config: Worker name `secretsanta`, account id taken from sibling repos, Vite build output as assets, a KV binding named `EVENTS` with a placeholder id and a comment pointing at the human ticket
-- [ ] Vite `base` is `/`; app routes work at the Worker root
-- [ ] `npm run deploy` builds then runs `wrangler deploy`; `npm run dev:worker` runs `wrangler dev` against the build
-- [ ] GitHub Pages workflow removed
-- [ ] README documents local dev, deploy, and the KV setup step
-- [ ] A legacy `/pairing?from=&to=` link still shows the assignment
-- [ ] Worker route logic has a Vitest test calling the fetch handler directly
+- [x] `worker/` directory with a plain fetch handler: `/api/health` returns JSON, everything else falls through to static assets with SPA fallback
+- [x] wrangler config: Worker name `secretsanta`, account id taken from sibling repos, Vite build output as assets, a KV binding named `EVENTS` with a placeholder id and a comment pointing at the human ticket
+- [x] Vite `base` is `/`; app routes work at the Worker root
+- [x] `npm run deploy` builds then runs `wrangler deploy`; `npm run dev:worker` runs `wrangler dev` against the build
+- [x] GitHub Pages workflow removed
+- [x] README documents local dev, deploy, and the KV setup step
+- [x] A legacy `/pairing?from=&to=` link still shows the assignment
+- [x] Worker route logic has a Vitest test calling the fetch handler directly
