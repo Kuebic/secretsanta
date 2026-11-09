@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowsClockwise, DownloadSimple, Eye, EyeSlash } from '@phosphor-icons/react';
 import { AssignmentStatus } from '../api/events';
 import { Participants } from '../types';
-import { CurrentDraw, hasDraw, isDrawStale } from '../utils/draw';
+import { countOpened, CurrentDraw, hasDraw, isDrawStale } from '../utils/draw';
 import { generateCSV } from '../utils/links';
 
 export type DrawErrorKey = 'errors.needMoreParticipants' | 'errors.invalidPairs' | 'draw.saveError' | 'draw.loadError';
@@ -25,7 +25,7 @@ export function DrawSection({ participants, draw, status, isDrawing, canDraw, er
   const [isRevealed, setIsRevealed] = useState(false);
   const drawn = hasDraw(draw);
   const total = Object.keys(participants).length;
-  const opened = Object.keys(participants).filter(id => status[id]?.openedAt).length;
+  const opened = countOpened(Object.keys(participants), status);
 
   const name = (id: string) => participants[id]?.name ?? '?';
   const pairings = Object.entries(draw.receivers)

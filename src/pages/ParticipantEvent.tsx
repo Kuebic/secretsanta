@@ -9,6 +9,7 @@ import { EnvelopeReveal } from '../components/EnvelopeReveal';
 import { EventDetailsBlock } from '../components/EventDetailsBlock';
 import { ReceiverWishlist } from '../components/ReceiverWishlist';
 import { WishlistEditor } from '../components/WishlistEditor';
+import { changedSinceOpened } from '../utils/draw';
 import { openAssignment } from '../utils/eventCrypto';
 import { openParticipantView, ParticipantView } from '../utils/eventData';
 import { parseParticipantFragment } from '../utils/linkCodec';
@@ -24,12 +25,6 @@ type Reveal =
   | { kind: 'none' }
   | { kind: 'error' }
   | { kind: 'revealed'; receiverId: string; changed: boolean };
-
-// The assignment was re-drawn with a different receiver after the giver last
-// opened it (the Worker keeps assignedAt when the receiver is unchanged).
-function changedSinceOpened({ assignedAt, openedAt }: StoredAssignment): boolean {
-  return Boolean(assignedAt && openedAt && Date.parse(assignedAt) > Date.parse(openedAt));
-}
 
 type Identity = 'unconfirmed' | 'confirmed' | 'wrongLink';
 

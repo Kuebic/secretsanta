@@ -18,7 +18,7 @@ import { MenuItem } from '../components/SideMenu';
 import { ApiError, deleteEvent, fetchEvent, fetchStatus, ParticipantStatus, saveAssignments, saveEvent } from '../api/events';
 import { StatusTable } from '../components/StatusTable';
 import { DrawErrorKey, DrawSection } from '../components/DrawSection';
-import { CurrentDraw, hasDraw, loadDraw, NO_DRAW, sealDraw } from '../utils/draw';
+import { countOpened, CurrentDraw, hasDraw, loadDraw, NO_DRAW, sealDraw } from '../utils/draw';
 import { generatePairs } from '../utils/generatePairs';
 import { Participants } from '../types';
 import { EventContent, EventDetails, openEvent, sealEvent, withParticipantTokens } from '../utils/eventData';
@@ -185,7 +185,7 @@ export function OrganizerEvent() {
       setDrawErrorKey('errors.invalidPairs');
       return;
     }
-    const openedCount = Object.keys(content.participants).filter(id => status[id]?.openedAt).length;
+    const openedCount = countOpened(Object.keys(content.participants), status);
     if (hasDraw(draw) && openedCount > 0 && !window.confirm(t('draw.redrawConfirm', { count: openedCount }))) {
       return;
     }

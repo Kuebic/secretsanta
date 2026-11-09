@@ -49,6 +49,21 @@ export async function sealDraw(
   return { receivers, sealed };
 }
 
+// The Worker keeps openedAt across a re-draw and moves assignedAt instead, so
+// the participant page can say "this changed". A giver has opened their
+// current assignment only if nothing was re-drawn for them since.
+export function changedSinceOpened({ assignedAt, openedAt }: AssignmentStatus): boolean {
+  return Boolean(assignedAt && openedAt && Date.parse(assignedAt) > Date.parse(openedAt));
+}
+
+export function hasOpenedCurrentAssignment(status: AssignmentStatus | undefined): boolean {
+  return Boolean(status?.openedAt) && !changedSinceOpened(status!);
+}
+
+export function countOpened(participantIds: string[], status: Record<string, AssignmentStatus>): number {
+  return participantIds.filter(id => hasOpenedCurrentAssignment(status[id])).length;
+}
+
 export function hasDraw(draw: CurrentDraw): boolean {
   return Object.keys(draw.receivers).length > 0;
 }

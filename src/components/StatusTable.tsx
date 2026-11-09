@@ -3,6 +3,7 @@ import { ArrowClockwise, Check, ShareNetwork } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ParticipantStatus } from '../api/events';
+import { hasOpenedCurrentAssignment } from '../utils/draw';
 import { CopyButton } from './CopyButton';
 
 export interface StatusRow {
@@ -153,7 +154,11 @@ export function StatusTable({ rows, status, eventTitle, isRefreshing, hasError, 
                     <Stamp at={status[row.id]?.wishlistUpdatedAt} label={t('status.filled')} missingLabel={t('status.notFilled')} />
                   </td>
                   <td className="py-2 pr-2">
-                    <Stamp at={status[row.id]?.openedAt} label={t('status.opened')} missingLabel={t('status.notOpened')} />
+                    <Stamp
+                      at={hasOpenedCurrentAssignment(status[row.id]) ? status[row.id].openedAt : undefined}
+                      label={t('status.opened')}
+                      missingLabel={t('status.notOpened')}
+                    />
                   </td>
                   <td className="py-2">
                     <Nudge message={nudgeMessage(row)} title={eventTitle || t('events.untitled')} />
