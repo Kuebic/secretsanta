@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import worker, { type Env } from './index';
 
 const INDEX_HTML = '<!doctype html><div id="root"></div>';
@@ -58,6 +58,28 @@ describe('worker fetch handler', () => {
     const response = await worker.fetch(navigate('/o/someEventId'), makeEnv());
     expect(response.status).toBe(200);
     expect(await response.text()).toBe(INDEX_HTML);
+  });
+
+  it('serves the app for a participant link and never sees or logs its fragment', async () => {
+    const env = makeEnv();
+    const key = 'k'.repeat(43);
+    const token = 't'.repeat(22);
+    const link = new URL(`https://santa.test/p/${'E'.repeat(22)}/${'P'.repeat(22)}#${key}.${token}`);
+    // A browser drops the fragment from the HTTP request; this is what reaches the Worker.
+    link.hash = '';
+    const logged: unknown[] = [];
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map(level =>
+      vi.spyOn(console, level).mockImplementation((...args) => { logged.push(...args); }));
+    try {
+      const response = await worker.fetch(new Request(link, { headers: { accept: 'text/html' } }), env);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(INDEX_HTML);
+    } finally {
+      spies.forEach(spy => spy.mockRestore());
+    }
+    const seen = JSON.stringify([env.seen, logged]);
+    expect(seen).not.toContain(key);
+    expect(seen).not.toContain(token);
   });
 
   it('keeps a 404 for missing files that are not page navigations', async () => {
