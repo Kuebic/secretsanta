@@ -60,4 +60,26 @@ describe('French locale', () => {
   it('answers every key the English locale has, in every French plural form, without falling back', async () => {
     expect(await missingInFrench()).toEqual([]);
   });
+
+  it('keeps every interpolated value the English string uses', () => {
+    const mismatches = leafKeys(en as Tree)
+      .map(key => ({ key, en: variables(lookup(en as Tree, key)!), fr: variables(lookup(fr as Tree, key) ?? '') }))
+      .filter(({ en, fr }) => en.join() !== fr.join());
+    expect(mismatches).toEqual([]);
+  });
+
+  it('translates every string rather than copying the English one', () => {
+    // Words French spells the same way, and a URL pattern.
+    const sameInBothLanguages = [
+      'participants.title',
+      'details.budget',
+      'details.notes',
+      'wishlist.notes',
+      'previousDraw.linkPlaceholder',
+    ];
+    const copiedFromEnglish = leafKeys(en as Tree).filter(
+      key => lookup(fr as Tree, key) === lookup(en as Tree, key) && !sameInBothLanguages.includes(key)
+    );
+    expect(copiedFromEnglish).toEqual([]);
+  });
 });
