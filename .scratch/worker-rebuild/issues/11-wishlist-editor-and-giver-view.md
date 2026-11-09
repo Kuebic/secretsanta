@@ -4,13 +4,13 @@
 
 **Blocked by:** 08
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#11
 
-- [ ] Wishlist editor: add/edit/remove/reorder items, optional URL per item, notes textarea; saves encrypted with the event key using the participant token
-- [ ] Server records `wishlistUpdatedAt` (plaintext timestamp) alongside the ciphertext
-- [ ] Giver sees receiver's wishlist and organizer's note under the revealed name; empty state when receiver has nothing yet
-- [ ] Item links open in a new tab, rendered as plain links (no previews)
-- [ ] Rules modal and text view label the field "Organizer's note"; i18n keys renamed, existing data preserved
-- [ ] 16 KB limit enforced with a visible character budget
+- [x] Wishlist editor: add/edit/remove/reorder items, optional URL per item, notes textarea; saves encrypted with the event key using the participant token
+- [x] Server records `wishlistUpdatedAt` (plaintext timestamp) alongside the ciphertext
+- [x] Giver sees receiver's wishlist and organizer's note under the revealed name; empty state when receiver has nothing yet
+- [x] Item links open in a new tab, rendered as plain links (no previews)
+- [x] Rules modal and text view label the field "Organizer's note"; i18n keys renamed, existing data preserved
+- [x] 16 KB limit enforced with a visible character budget
