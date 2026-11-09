@@ -1,3 +1,5 @@
+import { handleEvents } from './events';
+
 // Minimal structural types for the bindings this Worker uses, so the
 // handler typechecks without pulling in @cloudflare/workers-types.
 export interface AssetsBinding {
@@ -8,6 +10,11 @@ export interface KVNamespaceLike {
   get(key: string): Promise<string | null>;
   put(key: string, value: string, options?: { expirationTtl?: number; metadata?: unknown }): Promise<void>;
   delete(key: string): Promise<void>;
+  list(options?: { prefix?: string; cursor?: string }): Promise<{
+    keys: { name: string }[];
+    list_complete: boolean;
+    cursor?: string;
+  }>;
 }
 
 export interface Env {
@@ -22,9 +29,13 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-async function handleApi(request: Request, url: URL): Promise<Response> {
+async function handleApi(request: Request, url: URL, env: Env): Promise<Response> {
   if (url.pathname === '/api/health' && request.method === 'GET') {
     return json({ ok: true });
+  }
+  const [, , collection, ...rest] = url.pathname.split('/');
+  if (collection === 'events') {
+    return handleEvents(request, env, rest);
   }
   return json({ error: 'not_found' }, 404);
 }
@@ -45,7 +56,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
-      return handleApi(request, url);
+      return handleApi(request, url, env);
     }
     return serveAsset(request, url, env);
   },

@@ -1,0 +1,298 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import worker, { type Env } from './index';
+import { hashToken } from '../src/utils/base64url';
+
+const THIRTEEN_MONTHS = 396 * 24 * 60 * 60;
+
+interface StoredEntry {
+  value: string;
+  expirationTtl?: number;
+  metadata?: unknown;
+  writes: number;
+}
+
+// In-memory stand-in for the EVENTS KV namespace.
+function makeKv() {
+  const store = new Map<string, StoredEntry>();
+  return {
+    store,
+    async get(key: string) {
+      return store.get(key)?.value ?? null;
+    },
+    async put(key: string, value: string, options: { expirationTtl?: number; metadata?: unknown } = {}) {
+      store.set(key, { value, ...options, writes: (store.get(key)?.writes ?? 0) + 1 });
+    },
+    async delete(key: string) {
+      store.delete(key);
+    },
+    async list({ prefix = '', cursor }: { prefix?: string; cursor?: string } = {}) {
+      // Pages of two keys so callers must follow the cursor.
+      const names = [...store.keys()].filter(name => name.startsWith(prefix)).sort();
+      const start = cursor ? Number(cursor) : 0;
+      const page = names.slice(start, start + 2);
+      const done = start + 2 >= names.length;
+      return { keys: page.map(name => ({ name })), list_complete: done, cursor: done ? undefined : String(start + 2) };
+    },
+  };
+}
+
+let kv: ReturnType<typeof makeKv>;
+let env: Env;
+
+beforeEach(() => {
+  kv = makeKv();
+  env = { ASSETS: { fetch: async () => new Response('asset') }, EVENTS: kv };
+});
+
+const EVENT_ID = 'evt_evt_evt_evt_evt_eA';
+const ORGANIZER_TOKEN = 'org-org-org-org-org-oA';
+const OTHER_TOKEN = 'bad-bad-bad-bad-bad-bA';
+const P1 = 'p1p1p1p1p1p1p1p1p1p1p1';
+const P2 = 'p2p2p2p2p2p2p2p2p2p2p2';
+
+// Shaped like real ciphertext: base64url of iv || data || tag.
+function blob(length = 64, fill = 'Q'): string {
+  return fill.repeat(length);
+}
+
+async function eventBody(overrides: Record<string, unknown> = {}) {
+  return {
+    details: blob(64, 'D'),
+    roster: blob(64, 'R'),
+    organizer: blob(64, 'O'),
+    participantTokenHashes: { [P1]: await hashToken('t1'), [P2]: await hashToken('t2') },
+    ...overrides,
+  };
+}
+
+function call(method: string, path: string, { token, body }: { token?: string; body?: unknown } = {}) {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (token) headers.authorization = `Bearer ${token}`;
+  return worker.fetch(
+    new Request(`https://santa.test${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+    }),
+    env,
+  );
+}
+
+async function createEvent() {
+  const response = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody() });
+  expect(response.status).toBe(201);
+  return response;
+}
+
+describe('events API: create and read', () => {
+  it('creates an event and returns its details and roster ciphertext', async () => {
+    await createEvent();
+    const response = await call('GET', `/api/events/${EVENT_ID}`);
+    expect(response.status).toBe(200);
+    const event = await response.json();
+    expect(event).toMatchObject({ details: blob(64, 'D'), roster: blob(64, 'R'), organizer: blob(64, 'O') });
+    expect(typeof event.createdAt).toBe('string');
+    expect(typeof event.updatedAt).toBe('string');
+  });
+
+  it('stores only the SHA-256 of the organizer token', async () => {
+    await createEvent();
+    const everything = [...kv.store.values()].map(entry => entry.value).join('\n');
+    expect(everything).not.toContain(ORGANIZER_TOKEN);
+    expect(JSON.parse(kv.store.get(`event:${EVENT_ID}:meta`)!.value)).toMatchObject({
+      organizerTokenHash: await hashToken(ORGANIZER_TOKEN),
+    });
+  });
+
+  it('answers 404 for an unknown event', async () => {
+    const response = await call('GET', `/api/events/${EVENT_ID}`);
+    expect(response.status).toBe(404);
+  });
+});
+
+describe('events API: organizer token', () => {
+  it('updates the event with the right organizer token', async () => {
+    await createEvent();
+    const response = await call('PUT', `/api/events/${EVENT_ID}`, {
+      token: ORGANIZER_TOKEN,
+      body: await eventBody({ details: blob(80, 'E') }),
+    });
+    expect(response.status).toBe(200);
+    expect((await (await call('GET', `/api/events/${EVENT_ID}`)).json()).details).toBe(blob(80, 'E'));
+  });
+
+  it('refuses an update with the wrong organizer token and keeps the event', async () => {
+    await createEvent();
+    const response = await call('PUT', `/api/events/${EVENT_ID}`, {
+      token: OTHER_TOKEN,
+      body: await eventBody({ details: blob(80, 'E') }),
+    });
+    expect(response.status).toBe(403);
+    expect((await (await call('GET', `/api/events/${EVENT_ID}`)).json()).details).toBe(blob(64, 'D'));
+  });
+
+  it('refuses a create or update without a token', async () => {
+    expect((await call('PUT', `/api/events/${EVENT_ID}`, { body: await eventBody() })).status).toBe(401);
+    expect(kv.store.size).toBe(0);
+    await createEvent();
+    expect((await call('PUT', `/api/events/${EVENT_ID}`, { body: await eventBody() })).status).toBe(401);
+  });
+});
+
+describe('events API: details and roster blobs', () => {
+  it('reads and writes the details blob on its own', async () => {
+    await createEvent();
+    const put = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(70, 'N') } });
+    expect(put.status).toBe(200);
+    const get = await call('GET', `/api/events/${EVENT_ID}/details`);
+    expect(await get.json()).toEqual({ details: blob(70, 'N') });
+  });
+
+  it('reads and writes the roster blob on its own, without exposing token hashes', async () => {
+    await createEvent();
+    const put = await call('PUT', `/api/events/${EVENT_ID}/roster`, {
+      token: ORGANIZER_TOKEN,
+      body: { roster: blob(70, 'S'), organizer: blob(70, 'T'), participantTokenHashes: { [P1]: await hashToken('t1') } },
+    });
+    expect(put.status).toBe(200);
+    const get = await call('GET', `/api/events/${EVENT_ID}/roster`);
+    expect(await get.json()).toEqual({ roster: blob(70, 'S'), organizer: blob(70, 'T') });
+  });
+
+  it('refuses details and roster writes with a wrong or missing token', async () => {
+    await createEvent();
+    const details = { details: blob(70, 'N') };
+    const roster = { roster: blob(70, 'S'), organizer: blob(70, 'T'), participantTokenHashes: {} };
+    expect((await call('PUT', `/api/events/${EVENT_ID}/details`, { token: OTHER_TOKEN, body: details })).status).toBe(403);
+    expect((await call('PUT', `/api/events/${EVENT_ID}/details`, { body: details })).status).toBe(401);
+    expect((await call('PUT', `/api/events/${EVENT_ID}/roster`, { token: OTHER_TOKEN, body: roster })).status).toBe(403);
+    expect((await call('PUT', `/api/events/${EVENT_ID}/roster`, { body: roster })).status).toBe(401);
+    expect(await (await call('GET', `/api/events/${EVENT_ID}/details`)).json()).toEqual({ details: blob(64, 'D') });
+  });
+
+  it('answers 404 for blobs of an unknown event, even with a token', async () => {
+    expect((await call('GET', `/api/events/${EVENT_ID}/details`)).status).toBe(404);
+    expect((await call('GET', `/api/events/${EVENT_ID}/roster`)).status).toBe(404);
+    expect((await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob() } })).status).toBe(404);
+  });
+});
+
+describe('events API: limits', () => {
+  it('accepts a blob of exactly 16 KB and rejects one byte more', async () => {
+    await createEvent();
+    const ok = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(16 * 1024) } });
+    expect(ok.status).toBe(200);
+    const tooBig = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(16 * 1024 + 1) } });
+    expect(tooBig.status).toBe(413);
+    const roster = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ roster: blob(16 * 1024 + 1) }) });
+    expect(roster.status).toBe(413);
+  });
+
+  it('rejects a request body far over the limit before parsing it', async () => {
+    await createEvent();
+    const response = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: 'x'.repeat(200 * 1024) });
+    expect(response.status).toBe(413);
+  });
+
+  it('accepts 100 participants and rejects 101', async () => {
+    const hashes = async (count: number) => {
+      const entries: [string, string][] = [];
+      for (let i = 0; i < count; i++) {
+        entries.push([String(i).padStart(22, 'p'), await hashToken(`t${i}`)]);
+      }
+      return Object.fromEntries(entries);
+    };
+    const ok = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ participantTokenHashes: await hashes(100) }) });
+    expect(ok.status).toBe(201);
+    const tooMany = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ participantTokenHashes: await hashes(101) }) });
+    expect(tooMany.status).toBe(413);
+  });
+
+  it('rejects blobs that are not ciphertext', async () => {
+    await createEvent();
+    for (const details of ['{"title":"Family Christmas"}', 'Family Christmas', 'short', 42, null]) {
+      const response = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details } });
+      expect(response.status).toBe(400);
+    }
+  });
+
+  it('rejects malformed event IDs', async () => {
+    expect((await call('PUT', '/api/events/short', { token: ORGANIZER_TOKEN, body: await eventBody() })).status).toBe(404);
+    expect(kv.store.size).toBe(0);
+  });
+});
+
+describe('events API: TTL', () => {
+  it('stores every event entry with a 13-month TTL', async () => {
+    await createEvent();
+    expect([...kv.store.keys()].sort()).toEqual([
+      `event:${EVENT_ID}:details`,
+      `event:${EVENT_ID}:meta`,
+      `event:${EVENT_ID}:roster`,
+    ]);
+    for (const entry of kv.store.values()) {
+      expect(entry.expirationTtl).toBe(THIRTEEN_MONTHS);
+    }
+  });
+
+  it('refreshes the TTL of every event entry on each organizer write', async () => {
+    await createEvent();
+    await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(70, 'N') } });
+    for (const entry of kv.store.values()) {
+      expect(entry.writes).toBe(2);
+      expect(entry.expirationTtl).toBe(THIRTEEN_MONTHS);
+    }
+    await call('PUT', `/api/events/${EVENT_ID}/roster`, {
+      token: ORGANIZER_TOKEN,
+      body: { roster: blob(70, 'S'), organizer: blob(70, 'T'), participantTokenHashes: {} },
+    });
+    for (const entry of kv.store.values()) {
+      expect(entry.writes).toBe(3);
+    }
+  });
+
+  it('does not refresh anything on reads or refused writes', async () => {
+    await createEvent();
+    await call('GET', `/api/events/${EVENT_ID}`);
+    await call('PUT', `/api/events/${EVENT_ID}/details`, { token: OTHER_TOKEN, body: { details: blob(70, 'N') } });
+    for (const entry of kv.store.values()) {
+      expect(entry.writes).toBe(1);
+    }
+  });
+
+  it('keeps createdAt and moves updatedAt on update', async () => {
+    await createEvent();
+    const before = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
+    await new Promise(resolve => setTimeout(resolve, 5));
+    await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(70, 'N') } });
+    const after = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
+    expect(after.createdAt).toBe(before.createdAt);
+    expect(after.updatedAt > before.updatedAt).toBe(true);
+  });
+});
+
+describe('events API: delete', () => {
+  it('removes every key of the event with the organizer token', async () => {
+    await createEvent();
+    // Entries later tickets add under the same prefix go too.
+    await kv.put(`event:${EVENT_ID}:p:${P1}:wishlist`, blob());
+    await kv.put(`event:${EVENT_ID}:p:${P2}:assignment`, blob());
+    await kv.put('event:otherotherotherotherA:meta', '{}');
+
+    const response = await call('DELETE', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN });
+    expect(response.status).toBe(204);
+    expect([...kv.store.keys()]).toEqual(['event:otherotherotherotherA:meta']);
+    expect((await call('GET', `/api/events/${EVENT_ID}`)).status).toBe(404);
+  });
+
+  it('refuses to delete with a wrong or missing token', async () => {
+    await createEvent();
+    expect((await call('DELETE', `/api/events/${EVENT_ID}`, { token: OTHER_TOKEN })).status).toBe(403);
+    expect((await call('DELETE', `/api/events/${EVENT_ID}`)).status).toBe(401);
+    expect(kv.store.size).toBe(3);
+  });
+
+  it('answers 404 when deleting an unknown event', async () => {
+    expect((await call('DELETE', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN })).status).toBe(404);
+  });
+});

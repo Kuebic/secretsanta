@@ -7,7 +7,7 @@ export function bytesToBase64url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function base64urlToBytes(text: string): Uint8Array {
+export function base64urlToBytes(text: string): Uint8Array<ArrayBuffer> {
   if (!/^[A-Za-z0-9_-]*$/.test(text)) {
     throw new Error('Not base64url');
   }
