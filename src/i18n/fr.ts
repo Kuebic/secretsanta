@@ -161,8 +161,14 @@ export const fr: Translations = {
     participantLinksTitle: "Liens des participants",
     participantLinksHelp: "Envoyez dès maintenant à chaque participant son propre lien. Il reste le même après chaque tirage : vous n'aurez jamais à le renvoyer.",
     participantLinksUnsaved: "Les liens des nouveaux participants fonctionnent une fois vos modifications enregistrées.",
-    copyParticipantLink: "Copier le lien de {{name}}",
     deleteError: "Impossible de supprimer l'événement. Vérifiez votre connexion et réessayez.",
+  },
+  share: {
+    copyLink: "Copier le lien",
+    copyMessage: "Copier en message",
+    share: "Partager",
+    message: "Bonjour {{name}} ! Voici votre lien personnel pour {{title}}. Ouvrez-le pour remplir votre liste de souhaits et, une fois le tirage fait, découvrir à qui vous offrez un cadeau :\n{{link}}",
+    messageUntitled: "Bonjour {{name}} ! Voici votre lien personnel pour notre Secret Santa. Ouvrez-le pour remplir votre liste de souhaits et, une fois le tirage fait, découvrir à qui vous offrez un cadeau :\n{{link}}",
   },
   participant: {
     loading: "Chargement de l'événement…",

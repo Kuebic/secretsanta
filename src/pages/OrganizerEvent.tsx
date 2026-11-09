@@ -13,6 +13,7 @@ import { ParticipantsTextView } from '../components/ParticipantsTextView';
 import { PostCard } from '../components/PostCard';
 import { PreviousDrawModal } from '../components/PreviousDrawModal';
 import { RulesModal } from '../components/RulesModal';
+import { ShareActions } from '../components/ShareActions';
 import { MenuItem } from '../components/SideMenu';
 import { ApiError, AssignmentStatus, deleteEvent, fetchEvent, saveAssignments, saveEvent } from '../api/events';
 import { DrawErrorKey, DrawSection } from '../components/DrawSection';
@@ -328,24 +329,23 @@ export function OrganizerEvent() {
                 isOpen={openSection === 'links'}
                 onToggle={() => setOpenSection('links')}
               >
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <p className="text-sm text-gray-600">{t('organizer.participantLinksHelp')}</p>
                   {saveState !== 'saved' && (
                     <p className="text-xs text-gray-500">{t('organizer.participantLinksUnsaved')}</p>
                   )}
                   {Object.values(content.participants).map(participant => (
-                    <CopyButton
+                    <ShareActions
                       key={participant.id}
-                      textToCopy={buildParticipantLink(window.location.origin, {
+                      name={participant.name}
+                      eventTitle={content.details.title}
+                      link={buildParticipantLink(window.location.origin, {
                         eventId: credentials.eventId,
                         participantId: participant.id,
                         eventKey: credentials.eventKey,
                         participantToken: content.participantTokens[participant.id],
                       })}
-                      className="w-full p-2 border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center gap-2"
-                    >
-                      {t('organizer.copyParticipantLink', { name: participant.name })}
-                    </CopyButton>
+                    />
                   ))}
                 </div>
               </Accordion>

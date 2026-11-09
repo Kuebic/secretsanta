@@ -159,8 +159,14 @@ export const en = {
     participantLinksTitle: "Participant links",
     participantLinksHelp: "Send each participant their own link now. It stays the same after every draw, so you never need to resend it.",
     participantLinksUnsaved: "New participants' links work once your changes are saved.",
-    copyParticipantLink: "Copy link for {{name}}",
     deleteError: "Couldn't delete the event. Check your connection and try again.",
+  },
+  share: {
+    copyLink: "Copy link",
+    copyMessage: "Copy as message",
+    share: "Share",
+    message: "Hi {{name}}! Here is your personal link for {{title}}. Open it to fill in your wishlist and, once the draw is done, to see who you are giving a gift to:\n{{link}}",
+    messageUntitled: "Hi {{name}}! Here is your personal link for our Secret Santa. Open it to fill in your wishlist and, once the draw is done, to see who you are giving a gift to:\n{{link}}",
   },
   participant: {
     loading: "Loading the event…",
