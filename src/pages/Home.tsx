@@ -12,6 +12,7 @@ import { mintEvent } from '../utils/eventCrypto';
 import { EMPTY_DETAILS, sealEvent } from '../utils/eventData';
 import { buildOrganizerLink } from '../utils/linkCodec';
 import { LocalEvent, upsertLocalEvent, useLocalEvents } from '../utils/localEvents';
+import { useMigrationNotice } from '../utils/legacyStorage';
 
 function organizerLink(event: LocalEvent): string {
   return buildOrganizerLink(window.location.origin, { eventId: event.id, eventKey: event.key, organizerToken: event.organizerToken });
@@ -27,6 +28,7 @@ export function Home() {
   const events = useLocalEvents();
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState(false);
+  const [showMigrationNotice, dismissMigrationNotice] = useMigrationNotice();
 
   const handleNewEvent = async () => {
     setIsCreating(true);
@@ -86,6 +88,16 @@ export function Home() {
           <div className="bg-postcard-nowhite rounded-lg px-5 py-3 text-white">
             <h2 className="text-xl">{t('events.title')}</h2>
           </div>
+
+          {showMigrationNotice && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-900 space-y-2" role="status">
+              <p className="font-medium">{t('migration.title')}</p>
+              <p>{t('migration.body')}</p>
+              <button type="button" onClick={dismissMigrationNotice} className="text-green-800 underline">
+                {t('migration.dismiss')}
+              </button>
+            </div>
+          )}
 
           {sortedEvents.length === 0 ? (
             <p className="p-4 bg-gray-50 rounded-lg text-gray-600">{t('events.empty')}</p>

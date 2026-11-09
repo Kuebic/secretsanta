@@ -95,6 +95,11 @@ export const fr: Translations = {
     createError: "Impossible de créer l'événement. Vérifiez votre connexion et réessayez.",
     keepLinkHint: "Le lien organisateur est le seul moyen de gérer un événement depuis un autre appareil. Gardez-en une copie en lieu sûr.",
   },
+  migration: {
+    title: "Votre liste enregistrée est devenue un événement",
+    body: "Vos participants, règles, notes de l'organisateur, instructions supplémentaires et dernier tirage ont été déplacés dans l'événement ci-dessous. Les instructions sont désormais ses notes. Ouvrez-le et gardez une copie de son lien organisateur : c'est le seul moyen de gérer l'événement depuis un autre appareil.",
+    dismiss: "Compris",
+  },
   previousDraw: {
     open: "Éviter un tirage précédent",
     title: "Éviter un tirage précédent",

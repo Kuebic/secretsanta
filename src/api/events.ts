@@ -17,11 +17,11 @@ export interface StoredEvent {
   updatedAt: string;
 }
 
-async function request(method: string, eventId: string, token?: string, body?: unknown): Promise<Response> {
+async function request(method: string, eventId: string, token?: string, body?: unknown, resource = ''): Promise<Response> {
   const headers: Record<string, string> = {};
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
-  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}`, {
+  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}${resource}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -38,6 +38,11 @@ export async function saveEvent(eventId: string, organizerToken: string, sealed:
 
 export async function fetchEvent(eventId: string): Promise<StoredEvent> {
   return (await request('GET', eventId)).json();
+}
+
+// One ciphertext per giver; replaces the whole draw.
+export async function saveAssignments(eventId: string, organizerToken: string, assignments: Record<string, string>): Promise<void> {
+  await request('PUT', eventId, organizerToken, { assignments }, '/assignments');
 }
 
 export async function deleteEvent(eventId: string, organizerToken: string): Promise<void> {

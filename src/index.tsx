@@ -8,6 +8,7 @@ import { Home } from './pages/Home';
 import { Pairing } from './pages/Pairing';
 import { OrganizerEvent } from './pages/OrganizerEvent';
 import { useEffect } from 'react';
+import { migrateLegacyStorage } from './utils/legacyStorage';
 
 function Redirect({ to }: { to: string }) {
   const [searchParams] = useSearchParams();
@@ -36,6 +37,8 @@ const router = createBrowserRouter([{
   // @ts-ignore
   basename: import.meta.env.BASE_URL,
 });
+
+void migrateLegacyStorage();
 
 const root = createRoot(document.getElementById("root")!);
 root.render(

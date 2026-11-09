@@ -93,6 +93,11 @@ export const en = {
     createError: "Couldn't create the event. Check your connection and try again.",
     keepLinkHint: "The organizer link is the only way to manage an event from another device. Keep a copy somewhere safe.",
   },
+  migration: {
+    title: "Your saved list is now an event",
+    body: "Your participants, rules, organizer's notes, additional instructions and last draw were moved into the event below. Instructions are now its notes. Open it and keep a copy of its organizer link: it is the only way to manage the event from another device.",
+    dismiss: "Got it",
+  },
   previousDraw: {
     open: "Avoid a previous draw",
     title: "Avoid a previous draw",
