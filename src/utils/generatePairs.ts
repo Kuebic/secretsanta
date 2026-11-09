@@ -25,10 +25,29 @@ export type GeneratedPairs = {
   }[];
 };
 
+/** Uniform integer in [0, max) from crypto.getRandomValues, by rejection sampling. */
+function randomIndex(max: number): number {
+  const limit = Math.floor(0x100000000 / max) * max;
+  const buffer = new Uint32Array(1);
+  do {
+    globalThis.crypto.getRandomValues(buffer);
+  } while (buffer[0] >= limit);
+  return buffer[0] % max;
+}
+
+function shuffle<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = randomIndex(i + 1);
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
 export function generatePairs(participants: Record<string, Participant>): GeneratedPairs | null {
   const participantIds = Object.keys(participants);
-  
-  if (participantIds.length < 2) {
+  const n = participantIds.length;
+
+  if (n < 2) {
     return null;
   }
 
@@ -39,92 +58,104 @@ export function generatePairs(participants: Record<string, Participant>): Genera
     }
   }
 
-  // Initialize candidate receivers for each giver
-  const initialCandidateReceivers = new Map<string, Set<string>>();
+  const indexOf = new Map(participantIds.map((id, i) => [id, i]));
 
-  for (const giverId of participantIds) {
-    const giver = participants[giverId];
-    
-    // Start with all participants except self as potential receivers
-    const candidates = new Set(participantIds.filter(id => id !== giverId));
-    
-    // Handle MUST rules
-    const mustRule = giver.rules.find(r => r.type === 'must');
+  // allowed[giver] lists the receivers this giver may draw.
+  const allowed: number[][] = participantIds.map((giverId, giver) => {
+    const rules = participants[giverId].rules;
+    const mustRule = rules.find(r => r.type === 'must');
     if (mustRule) {
-      // If there's a MUST rule, this is the only possible receiver
-      candidates.clear();
-      candidates.add(mustRule.targetParticipantId);
-    } else {
-      // Remove MUST NOT targets from candidates
-      giver.rules
-        .filter(r => r.type === 'mustNot')
-        .forEach(r => candidates.delete(r.targetParticipantId));
+      const receiver = indexOf.get(mustRule.targetParticipantId);
+      return receiver === undefined ? [] : [receiver];
     }
+    const mustNot = new Set(
+      rules.filter(r => r.type === 'mustNot').map(r => indexOf.get(r.targetParticipantId)),
+    );
+    return participantIds.map((_, r) => r).filter(r => r !== giver && !mustNot.has(r));
+  });
 
-    initialCandidateReceivers.set(giverId, candidates);
-  }
+  // A perfect matching between givers and receivers is maintained throughout.
+  // Its existence is exactly "the rules allow a draw", so the search below
+  // only commits to a receiver when the rest of the roster can still be
+  // completed, and it never runs into a dead end.
+  const receiverOf = new Array<number>(n).fill(-1);
+  const giverOf = new Array<number>(n).fill(-1);
+  const fixed = new Array<boolean>(n).fill(false);
 
-  // Find next giver with fewest options
-  const findNextGiver = (candidateReceivers: Map<string, Set<string>>): string | null => {
-    let minOptions = Infinity;
-    let result: string | null = null;
-
-    for (const [giverId, candidates] of candidateReceivers) {
-      if (candidates.size < minOptions) {
-        minOptions = candidates.size;
-        result = giverId;
+  // Find a receiver for `giver`, re-routing unfixed givers along an
+  // augmenting path if needed. Receivers held by fixed givers are off limits.
+  const augment = (giver: number, visited: boolean[]): boolean => {
+    for (const receiver of allowed[giver]) {
+      if (visited[receiver]) continue;
+      visited[receiver] = true;
+      const holder = giverOf[receiver];
+      if (holder !== -1 && fixed[holder]) continue;
+      if (holder === -1 || augment(holder, visited)) {
+        receiverOf[giver] = receiver;
+        giverOf[receiver] = giver;
+        return true;
       }
     }
-
-    return result;
+    return false;
   };
 
-  pairingGenerations:
-  for (let t = 0; t < 10; t++) {
-    // Generate pairings
-    const finalPairs = new Map<string, string>();
-    const candidateReceivers = structuredClone(initialCandidateReceivers);
-
-    while (candidateReceivers.size > 0) {
-      const giverId = findNextGiver(candidateReceivers);
-      if (!giverId) break;
-
-      const candidates = candidateReceivers.get(giverId)!;
-      if (candidates.size === 0) {
-        continue pairingGenerations; // No valid receivers left for this giver
-      }
-
-      // Randomly select a receiver from candidates
-      const receiverId = Array.from(candidates)[Math.floor(Math.random() * candidates.size)];
-      finalPairs.set(giverId, receiverId);
-
-      // Remove this receiver as an option for all remaining givers
-      candidateReceivers.delete(giverId);
-      for (const candidates of candidateReceivers.values()) {
-        candidates.delete(receiverId);
-      }
+  for (let giver = 0; giver < n; giver++) {
+    if (!augment(giver, new Array<boolean>(n).fill(false))) {
+      return null; // The rules allow no draw
     }
-
-    if (finalPairs.size !== participantIds.length) {
-      continue pairingGenerations; // Not everyone got paired
-    }
-
-    const pairings = Array.from(finalPairs).map(([giverId, receiverId]) => ({
-      giver: {
-        id: giverId,
-        name: participants[giverId].name
-      },
-      receiver: {
-        id: receiverId,
-        name: participants[receiverId].name
-      }
-    }));
-
-    return {
-      hash: generateGenerationHash(participants),
-      pairings
-    };
   }
 
-  return null;
-} 
+  // Assign one giver at a time, most constrained first, each picking a
+  // random receiver among those that keep the draw completable.
+  for (let step = 0; step < n; step++) {
+    let giver = -1;
+    let candidates: number[] = [];
+    for (let g = 0; g < n; g++) {
+      if (fixed[g]) continue;
+      const open = allowed[g].filter(r => {
+        const holder = giverOf[r];
+        return holder === -1 || !fixed[holder];
+      });
+      if (giver === -1 || open.length < candidates.length) {
+        giver = g;
+        candidates = open;
+      }
+    }
+
+    fixed[giver] = true;
+    for (const receiver of shuffle(candidates)) {
+      if (receiverOf[giver] === receiver) break;
+
+      const savedReceiverOf = receiverOf.slice();
+      const savedGiverOf = giverOf.slice();
+
+      // Take `receiver` from its current holder, free our old receiver,
+      // then look for a new receiver for the displaced holder.
+      const displaced = giverOf[receiver];
+      giverOf[receiverOf[giver]] = -1;
+      receiverOf[giver] = receiver;
+      giverOf[receiver] = giver;
+      receiverOf[displaced] = -1;
+
+      const visited = new Array<boolean>(n).fill(false);
+      visited[receiver] = true;
+      if (augment(displaced, visited)) break;
+
+      receiverOf.splice(0, n, ...savedReceiverOf);
+      giverOf.splice(0, n, ...savedGiverOf);
+    }
+  }
+
+  const pairings = participantIds.map((giverId, giver) => {
+    const receiverId = participantIds[receiverOf[giver]];
+    return {
+      giver: { id: giverId, name: participants[giverId].name },
+      receiver: { id: receiverId, name: participants[receiverId].name },
+    };
+  });
+
+  return {
+    hash: generateGenerationHash(participants),
+    pairings,
+  };
+}
