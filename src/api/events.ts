@@ -43,3 +43,19 @@ export async function fetchEvent(eventId: string): Promise<StoredEvent> {
 export async function deleteEvent(eventId: string, organizerToken: string): Promise<void> {
   await request('DELETE', eventId, organizerToken);
 }
+
+// A giver's encrypted assignment, or null when the event has no draw for them
+// yet. Response shape `{ assignment }` per the spec's API list (ticket 08).
+export async function fetchAssignment(eventId: string, participantId: string): Promise<string | null> {
+  const response = await fetch(
+    `/api/events/${encodeURIComponent(eventId)}/participants/${encodeURIComponent(participantId)}/assignment`,
+  );
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status);
+  }
+  const { assignment } = await response.json() as { assignment: string };
+  return assignment;
+}

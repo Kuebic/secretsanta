@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Code, Rows, Trash } from '@phosphor-icons/react';
+import { ArrowLeft, ClockCounterClockwise, Code, Rows, Trash } from '@phosphor-icons/react';
 import { Accordion } from '../components/Accordion';
 import { AccordionContainer } from '../components/AccordionContainer';
 import { CopyButton } from '../components/CopyButton';
@@ -11,6 +11,7 @@ import { PageTransition } from '../components/PageTransition';
 import { ParticipantsList } from '../components/ParticipantsList';
 import { ParticipantsTextView } from '../components/ParticipantsTextView';
 import { PostCard } from '../components/PostCard';
+import { PreviousDrawModal } from '../components/PreviousDrawModal';
 import { RulesModal } from '../components/RulesModal';
 import { MenuItem } from '../components/SideMenu';
 import { ApiError, deleteEvent, fetchEvent, saveEvent } from '../api/events';
@@ -46,6 +47,7 @@ export function OrganizerEvent() {
   const [isTextView, setIsTextView] = useState(false);
   const [openSection, setOpenSection] = useState<'participants' | 'details'>('participants');
   const [rulesParticipantId, setRulesParticipantId] = useState<string | null>(null);
+  const [isPreviousDrawOpen, setIsPreviousDrawOpen] = useState(false);
 
   // Bumped on every edit; a save only marks 'saved' if nothing changed meanwhile.
   const revision = useRef(0);
@@ -253,6 +255,14 @@ export function OrganizerEvent() {
                   onOpenRules={setRulesParticipantId}
                 />
               )}
+              <button
+                type="button"
+                onClick={() => setIsPreviousDrawOpen(true)}
+                className="mt-4 w-full p-2 border border-red-300 text-red-700 rounded hover:bg-red-50 flex items-center justify-center gap-2"
+              >
+                <ClockCounterClockwise size={20} weight="bold" />
+                {t('previousDraw.open')}
+              </button>
             </Accordion>
 
             <Accordion
@@ -273,6 +283,14 @@ export function OrganizerEvent() {
         participants={content.participants}
         participantId={rulesParticipantId}
         onChangeParticipants={setParticipants}
+      />
+    )}
+    {isPreviousDrawOpen && (
+      <PreviousDrawModal
+        currentEventId={credentials.eventId}
+        participants={content.participants}
+        onChangeParticipants={setParticipants}
+        onClose={() => setIsPreviousDrawOpen(false)}
       />
     )}
   </>;
