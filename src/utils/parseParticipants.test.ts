@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import fc from 'fast-check';
 
 import { parseParticipantsText, formatParticipantText } from './parseParticipants';
 import { Participant } from '../types';
@@ -170,3 +171,50 @@ describe('formatParticipantText', () => {
     );
   });
 }); 
+describe('mutual exclusion in the text view', () => {
+  it('shows the Must Not rule on both lines', () => {
+    const participants: Record<string, Participant> = {
+      a: { id: 'a', name: 'Alice', rules: [{ type: 'mustNot', targetParticipantId: 'b' }] },
+      b: { id: 'b', name: 'Bob', rules: [{ type: 'mustNot', targetParticipantId: 'a' }] },
+      c: { id: 'c', name: 'Charlie', rules: [] },
+    };
+
+    expect(formatParticipantText(participants)).toBe('Alice !Bob\nBob !Alice\nCharlie\n');
+  });
+
+  it('round-trips unchanged through parse and format', () => {
+    const names = fc.uniqueArray(
+      fc.stringMatching(/^[A-Za-z][A-Za-z0-9]{0,7}$/),
+      { minLength: 2, maxLength: 8 },
+    );
+
+    fc.assert(fc.property(
+      names.chain(ns => fc.tuple(
+        fc.constant(ns),
+        fc.uniqueArray(
+          fc.tuple(fc.nat(ns.length - 1), fc.nat(ns.length - 1)).filter(([x, y]) => x !== y),
+          { maxLength: ns.length * 2, selector: ([x, y]) => `${Math.min(x, y)}-${Math.max(x, y)}` },
+        ),
+      )),
+      ([ns, pairs]) => {
+        const lines = ns.map(n => [n]);
+        for (const [x, y] of pairs) {
+          lines[x].push(`!${ns[y]}`);
+          lines[y].push(`!${ns[x]}`);
+        }
+        const text = lines.map(l => `${l.join(' ')}\n`).join('');
+
+        const parsed = parseParticipantsText(text);
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) return;
+
+        const byName = Object.fromEntries(Object.values(parsed.participants).map(p => [p.name, p]));
+        for (const [x, y] of pairs) {
+          expect(byName[ns[x]].rules).toContainEqual({ type: 'mustNot', targetParticipantId: byName[ns[y]].id });
+          expect(byName[ns[y]].rules).toContainEqual({ type: 'mustNot', targetParticipantId: byName[ns[x]].id });
+        }
+        expect(formatParticipantText(parsed.participants)).toBe(text);
+      },
+    ));
+  });
+});
