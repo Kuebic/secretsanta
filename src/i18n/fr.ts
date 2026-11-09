@@ -37,9 +37,7 @@ export const fr: Locale<Translations> = {
   },
   participants: {
     title: "Participants",
-    generationWarning: "Important: Toute modification de la liste des participants ou de leurs paramètres nécessitera la création de nouvelles associations. Les liens existants ne seront pas modifiés.",
     addPerson: "Ajouter une Personne",
-    generatePairs: "Générer les Associations",
     enterName: "Entrez le nom du participant",
     editRules: "Modifier les règles",
     removeParticipant: "Supprimer le participant",
@@ -69,14 +67,7 @@ export const fr: Locale<Translations> = {
     mutualExclusionRemoveBothSides: "Supprimer les deux",
   },
   links: {
-    title: "Liens à Partager",
-    warningParticipantsChanged: "Attention: Les participants ou leurs règles ont été modifiés depuis la dernière génération de ces liens.",
-    resetAssignments: "Régénérer les Associations",
-    shareInstructions: "Partagez chaque lien uniquement avec le donneur correspondant",
-    exportCSV: "Exporter en CSV",
-    copySecretLink: "Copier le Lien Secret",
     linkCopied: "Lien copié !",
-    for: "pour",
   },
   details: {
     title: "Détails",

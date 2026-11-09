@@ -4,7 +4,7 @@ import { ArrowsClockwise, DownloadSimple, Eye, EyeSlash } from '@phosphor-icons/
 import { AssignmentStatus } from '../api/events';
 import { Participants } from '../types';
 import { countOpened, CurrentDraw, hasDraw, isDrawStale } from '../utils/draw';
-import { generateCSV } from '../utils/links';
+import { generateCSV } from '../utils/csv';
 
 export type DrawErrorKey = 'errors.needMoreParticipants' | 'errors.invalidPairs' | 'draw.saveError' | 'draw.loadError';
 

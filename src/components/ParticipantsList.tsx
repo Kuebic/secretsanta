@@ -1,27 +1,20 @@
 import { useState } from 'react';
-import { ArrowsClockwise, List, TextT } from "@phosphor-icons/react";
 import { Participant } from '../types';
-import { useTranslation } from 'react-i18next';
 import { ParticipantRow } from './ParticipantRow';
-import { ParticipantsTextView } from './ParticipantsTextView';
 import { produce } from 'immer';
 import { mintParticipantId } from '../utils/eventCrypto';
 
 interface ParticipantsListProps {
   participants: Record<string, Participant>;
   onChangeParticipants: (newParticipants: Record<string, Participant>) => void;
-  onOpenRules: (participantName: string) => void;
-  // Absent until draws move to the server (ticket 08).
-  onGeneratePairs?: () => void;
+  onOpenRules: (participantId: string) => void;
 }
 
 export function ParticipantsList({
   participants,
   onChangeParticipants,
   onOpenRules,
-  onGeneratePairs,
 }: ParticipantsListProps) {
-  const { t } = useTranslation();
   const [nextParticipantId, setNextParticipantId] = useState(() => mintParticipantId());
 
   const updateParticipant = (id: string, name: string) => {
@@ -55,12 +48,6 @@ export function ParticipantsList({
 
   return (
     <div className="space-y-4">
-      {onGeneratePairs && (
-        <p className="mt-1 text-xs text-gray-500">
-          {t('participants.generationWarning')}
-        </p>
-      )}
-
       <div className="space-y-2">
         {participantsList.map((participant, index) => (
           <ParticipantRow
@@ -74,17 +61,6 @@ export function ParticipantsList({
           />
         ))}
       </div>
-
-      {onGeneratePairs && (
-        <button
-          type="button"
-          onClick={onGeneratePairs}
-          className="w-full bg-green-500 text-white p-2 rounded hover:bg-blue-600 flex items-center justify-center gap-2"
-        >
-          <ArrowsClockwise size={20} weight="bold" />
-          {t('participants.generatePairs')}
-        </button>
-      )}
     </div>
   );
 }

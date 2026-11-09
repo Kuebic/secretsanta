@@ -1,4 +1,5 @@
-// Use a consistent key (this is just for obfuscation, not security)
+// Legacy /pairing?from=&to= links only (ADR 0001): a fixed key the static
+// version used for obfuscation, kept so those links still decrypt.
 const ENCRYPTION_KEY_BYTES = new Uint8Array([
   132, 41, 242, 153, 104, 87, 23, 190,
   54, 187, 224, 176, 15, 198, 167, 249,
@@ -20,28 +21,6 @@ export async function getEncryptionKey(): Promise<CryptoKey> {
   );
   
   return cachedKey;
-}
-
-export async function encryptText(text: string): Promise<string> {
-  const key = await getEncryptionKey();
-  const encodedText = new TextEncoder().encode(text);
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  
-  const encryptedData = await window.crypto.subtle.encrypt(
-    {
-      name: "AES-GCM",
-      iv
-    },
-    key,
-    encodedText
-  );
-
-  // Combine IV and encrypted data
-  const combined = new Uint8Array(iv.length + new Uint8Array(encryptedData).length);
-  combined.set(iv);
-  combined.set(new Uint8Array(encryptedData), iv.length);
-  
-  return btoa(String.fromCharCode(...combined));
 }
 
 export async function decryptText(encryptedText: string): Promise<string> {

@@ -35,9 +35,7 @@ export const en = {
   },
   participants: {
     title: "Participants",
-    generationWarning: "Important: Any change made to the participant list or settings will require creating new pairings. Existing links won't be retroactively modified.", 
     addPerson: "Add Person",
-    generatePairs: "Generate Pairings",
     enterName: "Enter participant name",
     editRules: "Edit rules",
     removeParticipant: "Remove participant",
@@ -66,14 +64,7 @@ export const en = {
     mutualExclusionRemoveBothSides: "Remove both sides",
   },
   links: {
-    title: "Links to Share",
-    warningParticipantsChanged: "Warning: Participants or rules have changed since the last time these links were generated.",
-    resetAssignments: "Regenerate Pairings",
-    shareInstructions: "Only share those links with their corresponding gift giver",
-    exportCSV: "Export as CSV",
-    copySecretLink: "Copy Secret Link",
     linkCopied: "Added to clipboard!",
-    for: "for"
   },
   details: {
     title: "Details",
