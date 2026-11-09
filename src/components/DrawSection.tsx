@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowsClockwise, DownloadSimple, Eye, EyeSlash, Shuffle } from '@phosphor-icons/react';
+import { ArrowsClockwise, ArrowsCounterClockwise, DownloadSimple, Eye, EyeSlash } from '@phosphor-icons/react';
 import { AssignmentStatus } from '../api/events';
 import { Participants } from '../types';
 import { countOpened, CurrentDraw, hasDraw, isDrawStale } from '../utils/draw';
@@ -8,8 +8,8 @@ import { generateCSV } from '../utils/csv';
 
 export type DrawErrorKey = 'errors.needMoreParticipants' | 'errors.invalidPairs' | 'draw.saveError' | 'draw.loadError';
 
-// 'keep' holds on to every assignment that still fits; 'shuffle' starts over.
-export type DrawMode = 'keep' | 'shuffle';
+// 'keep' holds on to every assignment that still fits; 'all' re-draws everyone.
+export type DrawMode = 'keep' | 'all';
 
 interface DrawSectionProps {
   participants: Participants;
@@ -78,12 +78,12 @@ export function DrawSection({ participants, draw, status, isDrawing, canDraw, er
           <p className="text-xs text-gray-500">{t('draw.redrawKeeps')}</p>
           <button
             type="button"
-            onClick={() => onDraw('shuffle')}
+            onClick={() => onDraw('all')}
             disabled={!canDraw || isDrawing}
             className="w-full p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-2 text-gray-700"
           >
-            <Shuffle size={20} weight="bold" />
-            {t('draw.shuffle')}
+            <ArrowsCounterClockwise size={20} weight="bold" />
+            {t('draw.redrawEveryone')}
           </button>
         </div>
       )}

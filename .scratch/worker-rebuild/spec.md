@@ -56,7 +56,7 @@ Vocabulary: `GLOSSARY.md`. Decisions: `docs/adr/0001` (one Worker), `0002` (zero
 
 - Backtracking search over candidate receivers, most-constrained giver first. `crypto.getRandomValues` for every random choice. Infeasible rules return `null` as today.
 - Minimal re-draw (ticket 15): the generator accepts an ordered list of assignments to keep, most protected first. It drops any that no longer fit the roster or rules, fixes the rest, and matches the remaining givers. If no draw exists with everything kept, it releases kept assignments from the least protected end, one at a time, until one does. Greedy, not provably minimal; the acceptance cases pin the behaviour that matters. The organizer passes opened givers first, then the others, each tier shuffled.
-- Re-draw keeps by default. "Shuffle everyone" is the secondary action and ignores the previous draw.
+- Re-draw keeps by default. "Re-draw everyone" is the secondary action and ignores the previous draw.
 
 ## Testing Decisions
 

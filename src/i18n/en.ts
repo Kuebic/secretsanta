@@ -132,7 +132,7 @@ export const en = {
     redrawConfirm_one: "{{count}} participant who already opened their assignment will get a different receiver. Continue?",
     redrawConfirm_other: "{{count}} participants who already opened their assignment will get a different receiver. Continue?",
     redrawKeeps: "Re-draw keeps every assignment that still fits. Only the ones that have to change do.",
-    shuffle: "Shuffle everyone",
+    redrawEveryone: "Re-draw everyone",
     stale: "Participants or rules have changed since the last draw. Re-draw: everyone whose assignment still fits keeps it.",
     revealAssignments: "Reveal assignments",
     hideAssignments: "Hide assignments",

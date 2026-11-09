@@ -138,7 +138,7 @@ export const fr: Locale<Translations> = {
     redrawConfirm_other: "{{count}} participants qui ont déjà ouvert leur tirage recevront une autre personne. Continuer ?",
     redrawConfirm_many: "{{count}} de participants qui ont déjà ouvert leur tirage recevront une autre personne. Continuer ?",
     redrawKeeps: "Refaire le tirage conserve chaque tirage encore valable. Seuls ceux qui doivent changer changent.",
-    shuffle: "Tout remélanger",
+    redrawEveryone: "Refaire le tirage pour tout le monde",
     stale: "Les participants ou les règles ont changé depuis le dernier tirage. Refaites le tirage : chacun dont le tirage reste valable le conserve.",
     revealAssignments: "Afficher les tirages",
     hideAssignments: "Masquer les tirages",

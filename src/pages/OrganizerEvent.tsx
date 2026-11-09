@@ -173,7 +173,7 @@ export function OrganizerEvent() {
   // Assignments are sealed per giver and written in one request; a giver whose
   // receiver is unchanged gets the same ciphertext back, so the Worker keeps
   // their opened state and they see no "this changed" banner. A re-draw keeps
-  // every assignment that still fits (ticket 15); a shuffle starts over.
+  // every assignment that still fits (ticket 15); re-drawing everyone starts over.
   const handleDraw = async (mode: DrawMode) => {
     if (!credentials || !content || isDrawing) return;
     setDrawErrorKey(null);

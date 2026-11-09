@@ -1,4 +1,5 @@
 import { Participant, Rule } from "../types";
+import { shuffle } from "./random";
 
 export function checkRules(rules: Rule[]): string | null {
   const mustRules = rules.filter(r => r.type === 'must');
@@ -24,24 +25,6 @@ export type GeneratedPairs = {
     receiver: {id: string; name: string};
   }[];
 };
-
-/** Uniform integer in [0, max) from crypto.getRandomValues, by rejection sampling. */
-function randomIndex(max: number): number {
-  const limit = Math.floor(0x100000000 / max) * max;
-  const buffer = new Uint32Array(1);
-  do {
-    globalThis.crypto.getRandomValues(buffer);
-  } while (buffer[0] >= limit);
-  return buffer[0] % max;
-}
-
-export function shuffle<T>(items: T[]): T[] {
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = randomIndex(i + 1);
-    [items[i], items[j]] = [items[j], items[i]];
-  }
-  return items;
-}
 
 /** An assignment from a previous draw the organizer would like to keep. */
 export interface KeptAssignment {
@@ -113,6 +96,20 @@ export function generatePairs(participants: Record<string, Participant>, options
     return false;
   };
 
+  // Kept assignments that still fit are fixed up front, most protected first.
+  // Each giver and receiver appears at most once.
+  const kept: number[] = [];
+  for (const { giverId, receiverId } of options.keep ?? []) {
+    const giver = indexOf.get(giverId);
+    const receiver = indexOf.get(receiverId);
+    if (giver === undefined || receiver === undefined) continue;
+    if (fixed[giver] || giverOf[receiver] !== -1 || !allowed[giver].includes(receiver)) continue;
+    receiverOf[giver] = receiver;
+    giverOf[receiver] = giver;
+    fixed[giver] = true;
+    kept.push(giver);
+  }
+
   // Receivers the stuck giver can reach along alternating paths through
   // unfixed givers end at receivers held by kept givers. Of those holders,
   // the one listed last in `kept` is the least protected.
@@ -136,20 +133,6 @@ export function generatePairs(participants: Record<string, Participant>, options
     }
     return -1;
   };
-
-  // Kept assignments that still fit are fixed up front, most protected first.
-  // Each giver and receiver appears at most once.
-  const kept: number[] = [];
-  for (const { giverId, receiverId } of options.keep ?? []) {
-    const giver = indexOf.get(giverId);
-    const receiver = indexOf.get(receiverId);
-    if (giver === undefined || receiver === undefined) continue;
-    if (fixed[giver] || giverOf[receiver] !== -1 || !allowed[giver].includes(receiver)) continue;
-    receiverOf[giver] = receiver;
-    giverOf[receiver] = giver;
-    fixed[giver] = true;
-    kept.push(giver);
-  }
 
   // Match every other giver. When a giver cannot be placed, a kept
   // assignment gives way: the least protected one among those holding a

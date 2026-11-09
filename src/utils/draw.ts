@@ -1,15 +1,18 @@
 import { AssignmentStatus, fetchAssignment } from '../api/events';
 import { Participants } from '../types';
 import { openAssignment, sealAssignment } from './eventCrypto';
-import { KeptAssignment, shuffle } from './generatePairs';
+import { KeptAssignment } from './generatePairs';
+import { shuffle } from './random';
 import { OrganizerCredentials } from './linkCodec';
 
 // The current draw as the organizer sees it: decrypted receivers, plus the
 // ciphertext the Worker holds for each giver so an unchanged assignment can
 // be resent as is (the Worker then keeps its assignedAt and openedAt).
+// giver participant ID -> receiver participant ID
+export type Receivers = Record<string, string>;
+
 export interface CurrentDraw {
-  // giver participant ID -> receiver participant ID
-  receivers: Record<string, string>;
+  receivers: Receivers;
   sealed: Record<string, string>;
 }
 
@@ -38,7 +41,7 @@ export async function loadDraw(
 export async function sealDraw(
   eventKey: string,
   participantTokens: Record<string, string>,
-  receivers: Record<string, string>,
+  receivers: Receivers,
   previous: CurrentDraw,
 ): Promise<CurrentDraw> {
   const sealed: Record<string, string> = {};
@@ -96,6 +99,6 @@ export function keepOrder(draw: CurrentDraw, status: Record<string, AssignmentSt
 }
 
 // Givers still in the draw whose receiver is not the one they had.
-export function changedGivers(previous: Record<string, string>, next: Record<string, string>): string[] {
+export function changedGivers(previous: Receivers, next: Receivers): string[] {
   return Object.keys(previous).filter(giverId => giverId in next && previous[giverId] !== next[giverId]);
 }

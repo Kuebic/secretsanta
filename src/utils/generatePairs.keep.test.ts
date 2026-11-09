@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import { generatePairs, GeneratedPairs, KeptAssignment } from './generatePairs';
-import { Participant } from '../types';
-
-type Roster = Record<string, Participant>;
+import { expectValidDraw, Roster } from './generatePairs.testHelpers';
+import { changedGivers, Receivers } from './draw';
 
 function roster(n: number): Roster {
   const participants: Roster = {};
@@ -13,30 +12,12 @@ function roster(n: number): Roster {
   return participants;
 }
 
-function receiversOf(draw: GeneratedPairs): Record<string, string> {
+function receiversOf(draw: GeneratedPairs): Receivers {
   return Object.fromEntries(draw.pairings.map(({ giver, receiver }) => [giver.id, receiver.id]));
 }
 
-function keepList(receivers: Record<string, string>): KeptAssignment[] {
+function keepList(receivers: Receivers): KeptAssignment[] {
   return Object.entries(receivers).map(([giverId, receiverId]) => ({ giverId, receiverId }));
-}
-
-function changedGivers(previous: Record<string, string>, next: Record<string, string>): string[] {
-  return Object.keys(previous).filter(giverId => giverId in next && previous[giverId] !== next[giverId]);
-}
-
-function expectValidDraw(participants: Roster, draw: GeneratedPairs) {
-  const ids = Object.keys(participants);
-  expect(draw.pairings).toHaveLength(ids.length);
-  expect(new Set(draw.pairings.map(a => a.giver.id))).toEqual(new Set(ids));
-  expect(new Set(draw.pairings.map(a => a.receiver.id))).toEqual(new Set(ids));
-  for (const { giver, receiver } of draw.pairings) {
-    const rules = participants[giver.id].rules;
-    const must = rules.find(r => r.type === 'must');
-    if (must) expect(receiver.id).toBe(must.targetParticipantId);
-    else expect(receiver.id).not.toBe(giver.id);
-    for (const rule of rules.filter(r => r.type === 'mustNot')) expect(receiver.id).not.toBe(rule.targetParticipantId);
-  }
 }
 
 const sizeArb = fc.integer({ min: 3, max: 25 });
@@ -98,7 +79,7 @@ describe('generatePairs with assignments to keep', () => {
     );
   });
 
-  it('keeps every kept assignment that still fits the rules and drops the ones that do not', () => {
+  it('re-routes only a short chain when a new Must Not invalidates one kept assignment', () => {
     fc.assert(
       fc.property(sizeArb, fc.nat(), (n, pick) => {
         const participants = roster(n);
@@ -111,7 +92,7 @@ describe('generatePairs with assignments to keep', () => {
         expectValidDraw(participants, next);
         const changed = changedGivers(previous, receiversOf(next));
         expect(changed).toContain(giver);
-        // Only a short chain moves: the giver, whoever held the receiver they take, and at most
+        // Pins the greedy release: the giver, whoever held the receiver they take, and at most
         // one more when that holder was the freed receiver and cannot draw themselves.
         expect(changed.length).toBeLessThanOrEqual(3);
       }),
