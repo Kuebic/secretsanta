@@ -8,6 +8,46 @@ Should you appreciate this tool so much that you'd like to thank me, you can eit
 
 <br/>
 
+## Hosting
+
+This fork runs as one Cloudflare Worker that serves the built app and the `/api/*` endpoints from the same origin (see `docs/adr/0001-single-worker-serves-app-and-api.md`). Config lives in `wrangler.jsonc`; the Worker code is in `worker/`.
+
+### Local dev
+
+```sh
+npm install
+npm run dev          # Vite dev server, app only (no /api)
+npm run dev:worker   # builds, then `wrangler dev` serves the build and the API with local KV
+npm test             # Vitest, including the Worker fetch handler
+npm run typecheck
+```
+
+`npm run dev:worker` listens on http://localhost:8787; `curl localhost:8787/api/health` should return `{"ok":true}`. Rebuild (re-run the script) after changing the app.
+
+### Deploy
+
+Deploys run from the organizer's machine. There is no API token for this account, so log in once with OAuth:
+
+```sh
+npx wrangler login
+npm run deploy       # vite build, then wrangler deploy
+```
+
+### KV setup (one time)
+
+The Worker stores events in a KV namespace bound as `EVENTS`. `wrangler.jsonc` ships with a placeholder id until it exists. Create it and paste the printed id into the `EVENTS` entry of `kv_namespaces`:
+
+```sh
+npx wrangler kv namespace create EVENTS
+```
+
+Local dev and tests never touch the real namespace.
+
+### Legacy links
+
+Links from the static version (`/pairing?from=…&to=…`) keep working on the Worker: unknown page paths fall back to the app, which decrypts them as before.
+
+
 ## License (MIT)
 
 > **Copyright © 2015 Maël Nison**

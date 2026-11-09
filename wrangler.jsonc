@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "secretsanta",
+  // Same Cloudflare account as the sibling repos. Deploys use `wrangler login` (OAuth); there is no API token.
+  "account_id": "5e7c03d562a80de198b3edeb8212639c",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    // Vite build output (`npm run build`).
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Unknown page paths get index.html so react-router handles /pairing, /o/..., /p/...
+    "not_found_handling": "single-page-application",
+    // /api/* always reaches the Worker, never the SPA fallback.
+    "run_worker_first": ["/api/*"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "EVENTS",
+      // PLACEHOLDER: the real namespace is created by a human in ticket 14
+      // (.scratch/worker-rebuild/issues/14-create-the-kv-namespace-deploy-verify-end-to-end.md).
+      // `wrangler dev` and tests use local KV, so this id only matters for `npm run deploy`.
+      "id": "00000000000000000000000000000000"
+    }
+  ]
+}
