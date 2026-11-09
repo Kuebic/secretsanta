@@ -39,6 +39,6 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
-    "sandcastle": "tsx .sandcastle/main.ts"
+    "sandcastle": "tsx .sandcastle/main.mts"
   }
 }
