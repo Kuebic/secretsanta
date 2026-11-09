@@ -457,3 +457,70 @@ describe('events API: opened', () => {
     expect(opened.expiration).toBe(Math.floor(Date.parse(updatedAt) / 1000) + THIRTEEN_MONTHS);
   });
 });
+
+describe('events API: wishlists', () => {
+  const wishlistPath = (pid: string) => `/api/events/${EVENT_ID}/participants/${pid}/wishlist`;
+  const save = (pid: string, token: string | undefined, wishlist: unknown) =>
+    call('PUT', wishlistPath(pid), { token, body: { wishlist } });
+
+  it('saves a participant\'s wishlist with their own token and serves it without auth, with wishlistUpdatedAt', async () => {
+    await createEvent();
+    const response = await save(P1, 't1', blob(64, 'W'));
+    expect(response.status).toBe(200);
+    const { wishlistUpdatedAt } = await response.json();
+    expect(Date.parse(wishlistUpdatedAt)).not.toBeNaN();
+    expect(await (await call('GET', wishlistPath(P1))).json()).toEqual({ wishlist: blob(64, 'W'), wishlistUpdatedAt });
+  });
+
+  it('answers 404 for a participant with no wishlist yet', async () => {
+    await createEvent();
+    expect((await call('GET', wishlistPath(P1))).status).toBe(404);
+  });
+
+  it('refuses a wishlist write with another participant\'s token, the organizer token, or no token', async () => {
+    await createEvent();
+    expect((await save(P1, 't2', blob(64, 'W'))).status).toBe(403);
+    expect((await save(P1, ORGANIZER_TOKEN, blob(64, 'W'))).status).toBe(403);
+    expect((await save(P1, undefined, blob(64, 'W'))).status).toBe(401);
+    expect((await call('GET', wishlistPath(P1))).status).toBe(404);
+  });
+
+  it('accepts a wishlist of exactly 16 KB, rejects one byte more and anything that is not ciphertext', async () => {
+    await createEvent();
+    expect((await save(P1, 't1', blob(16 * 1024))).status).toBe(200);
+    expect((await save(P1, 't1', blob(MAX_BLOB_BYTES_PLUS_ONE))).status).toBe(413);
+    for (const wishlist of ['{"items":[]}', 'Socks', 42, null]) {
+      expect((await save(P1, 't1', wishlist)).status).toBe(400);
+    }
+    expect((await (await call('GET', wishlistPath(P1))).json()).wishlist).toBe(blob(16 * 1024));
+  });
+
+  it('moves wishlistUpdatedAt on every save and lists it in the event status, beside assignment timing', async () => {
+    await createEvent();
+    const first = (await (await save(P1, 't1', blob(64, 'W'))).json()).wishlistUpdatedAt;
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const second = (await (await save(P1, 't1', blob(64, 'X'))).json()).wishlistUpdatedAt;
+    expect(Date.parse(second)).toBeGreaterThan(Date.parse(first));
+    await call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } } });
+
+    const { status } = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
+    expect(status[P1].wishlistUpdatedAt).toBe(second);
+    expect(typeof status[P1].assignedAt).toBe('string');
+    expect(status[P2].wishlistUpdatedAt).toBeUndefined();
+  });
+
+  it('stores only the ciphertext and a timestamp, without outliving the event', async () => {
+    await createEvent();
+    await save(P1, 't1', blob(64, 'W'));
+    const entry = kv.store.get(`event:${EVENT_ID}:p:${P1}:wishlist`)!;
+    expect(entry.value).toBe(blob(64, 'W'));
+    expect(Object.keys(entry.metadata as object)).toEqual(['wishlistUpdatedAt']);
+    const updatedAt = JSON.parse(kv.store.get(`event:${EVENT_ID}:meta`)!.value).updatedAt;
+    expect(entry.expiration).toBe(Math.floor(Date.parse(updatedAt) / 1000) + THIRTEEN_MONTHS);
+  });
+
+  it('answers 404 for wishlists of an unknown event', async () => {
+    expect((await save(P1, 't1', blob(64, 'W'))).status).toBe(404);
+    expect((await call('GET', wishlistPath(P1))).status).toBe(404);
+  });
+});

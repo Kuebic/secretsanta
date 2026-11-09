@@ -36,6 +36,12 @@ interface AssignmentStatus {
   openedAt?: string;
 }
 
+// What the event status lists per participant: assignment timing plus when
+// their wishlist last changed. Plaintext timing only.
+interface ParticipantStatus extends AssignmentStatus {
+  wishlistUpdatedAt?: string;
+}
+
 class HttpError extends Error {
   constructor(readonly status: number, readonly code: string) {
     super(code);
@@ -55,6 +61,7 @@ const keys = {
   details: (id: string) => `event:${id}:details`,
   roster: (id: string) => `event:${id}:roster`,
   assignment: (id: string, pid: string) => `event:${id}:p:${pid}:assignment`,
+  wishlist: (id: string, pid: string) => `event:${id}:p:${pid}:wishlist`,
 };
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -190,8 +197,8 @@ async function putEvent(request: Request, env: Env, id: string): Promise<Respons
 
 // Per-participant status for every roster entry, read from KV metadata in
 // one prefix listing.
-async function readStatus(env: Env, id: string, roster: StoredRoster): Promise<Record<string, AssignmentStatus>> {
-  const status: Record<string, AssignmentStatus> = Object.fromEntries(
+async function readStatus(env: Env, id: string, roster: StoredRoster): Promise<Record<string, ParticipantStatus>> {
+  const status: Record<string, ParticipantStatus> = Object.fromEntries(
     Object.keys(roster.participantTokenHashes).map(pid => [pid, {}]),
   );
   const prefix = `${keys.prefix(id)}p:`;
@@ -202,6 +209,9 @@ async function readStatus(env: Env, id: string, roster: StoredRoster): Promise<R
       const [pid, kind] = name.slice(prefix.length).split(':');
       if (kind === 'assignment' && pid in status) {
         Object.assign(status[pid], assignmentStatus(metadata));
+      }
+      if (kind === 'wishlist' && pid in status) {
+        Object.assign(status[pid], wishlistStatus(metadata));
       }
     }
     cursor = page.list_complete ? undefined : page.cursor;
@@ -218,6 +228,15 @@ function assignmentStatus(metadata: unknown): AssignmentStatus {
   }
   return status;
 }
+
+function wishlistStatus(metadata: unknown): { wishlistUpdatedAt?: string } {
+  const value = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).wishlistUpdatedAt : undefined;
+  return typeof value === 'string' ? { wishlistUpdatedAt: value } : {};
+}
+
+// Participant writes keep the event's expiry rather than refreshing it: only
+// organizer writes extend an event's life.
+const eventExpiration = (meta: Meta) => Math.floor(Date.parse(meta.updatedAt) / 1000) + EVENT_TTL_SECONDS;
 
 async function getEvent(env: Env, id: string): Promise<Response> {
   const meta = await requireEvent(env, id);
@@ -322,10 +341,35 @@ async function postOpened(request: Request, env: Env, id: string, pid: string): 
   }
   const openedAt = new Date().toISOString();
   await env.EVENTS.put(keys.assignment(id, pid), value, {
-    expiration: Math.floor(Date.parse(meta.updatedAt) / 1000) + EVENT_TTL_SECONDS,
+    expiration: eventExpiration(meta),
     metadata: { ...assignmentStatus(metadata), openedAt },
   });
   return json({ openedAt });
+}
+
+// A participant saves their own wishlist, sealed with the event key in their
+// browser, using their participant token. The server keeps the ciphertext
+// and when it last changed (ADR 0002).
+async function putWishlist(request: Request, env: Env, id: string, pid: string): Promise<Response> {
+  const meta = await requireEvent(env, id);
+  const { roster } = await readStored(env, id);
+  await authorizeToken(request, roster.participantTokenHashes[pid]);
+  const wishlist = ciphertext((await readJson(request)).wishlist);
+  const wishlistUpdatedAt = new Date().toISOString();
+  await env.EVENTS.put(keys.wishlist(id, pid), wishlist, {
+    expiration: eventExpiration(meta),
+    metadata: { wishlistUpdatedAt },
+  });
+  return json({ wishlistUpdatedAt });
+}
+
+async function getWishlist(env: Env, id: string, pid: string): Promise<Response> {
+  await requireEvent(env, id);
+  const { value, metadata } = await env.EVENTS.getWithMetadata(keys.wishlist(id, pid));
+  if (value === null) {
+    throw new HttpError(404, 'not_found');
+  }
+  return json({ wishlist: value, ...wishlistStatus(metadata) });
 }
 
 // Removes everything under the event's prefix, including entries later
@@ -357,6 +401,12 @@ export async function handleEvents(request: Request, env: Env, path: string[]): 
       const [pid, sub] = rest;
       if (request.method === 'GET' && sub === 'assignment') {
         return await getAssignment(env, id, pid);
+      }
+      if (request.method === 'GET' && sub === 'wishlist') {
+        return await getWishlist(env, id, pid);
+      }
+      if (request.method === 'PUT' && sub === 'wishlist') {
+        return await putWishlist(request, env, id, pid);
       }
       if (request.method === 'POST' && sub === 'opened') {
         return await postOpened(request, env, id, pid);
