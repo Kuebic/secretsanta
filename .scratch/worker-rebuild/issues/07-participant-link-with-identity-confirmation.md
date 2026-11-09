@@ -6,13 +6,13 @@ See ADR 0003.
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#7
 
-- [ ] Organizer view lists each participant's link (copy button) as soon as the event has a roster, before any draw
-- [ ] Participant page decrypts roster + details with the fragment key; fragment never reaches the server (verified in Worker logs/tests)
-- [ ] Identity confirmation step: Yes / "No, wrong link"
-- [ ] Yes → details + "no draw yet" state; No → guidance, no names shown
-- [ ] Invalid or deleted event shows a friendly error
-- [ ] Link ~130 chars or fewer
+- [x] Organizer view lists each participant's link (copy button) as soon as the event has a roster, before any draw
+- [x] Participant page decrypts roster + details with the fragment key; fragment never reaches the server (verified in Worker logs/tests)
+- [x] Identity confirmation step: Yes / "No, wrong link"
+- [x] Yes → details + "no draw yet" state; No → guidance, no names shown
+- [x] Invalid or deleted event shows a friendly error
+- [x] Link ~130 chars or fewer
