@@ -146,6 +146,18 @@ describe('events API: organizer token', () => {
 });
 
 describe('events API: details and roster blobs', () => {
+  it('new details written after the draw are served on the next read, and the same participant links still open their assignments', async () => {
+    await createEvent();
+    await call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } } });
+
+    const update = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details: blob(64, 'E') }) });
+    expect(update.status).toBe(200);
+
+    expect((await (await call('GET', `/api/events/${EVENT_ID}`)).json()).details).toBe(blob(64, 'E'));
+    expect(await (await call('GET', `/api/events/${EVENT_ID}/participants/${P1}/assignment`)).json()).toMatchObject({ assignment: blob(64, 'A') });
+    expect((await call('POST', `/api/events/${EVENT_ID}/participants/${P1}/opened`, { token: 't1' })).status).toBe(200);
+  });
+
   it('reads and writes the details blob on its own', async () => {
     await createEvent();
     const put = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(70, 'N') } });

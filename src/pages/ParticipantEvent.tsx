@@ -6,6 +6,7 @@ import { PageTransition } from '../components/PageTransition';
 import { PostCard } from '../components/PostCard';
 import { ApiError, fetchAssignment, fetchEvent, markOpened, StoredAssignment } from '../api/events';
 import { EnvelopeReveal } from '../components/EnvelopeReveal';
+import { EventDetailsBlock } from '../components/EventDetailsBlock';
 import { openAssignment } from '../utils/eventCrypto';
 import { openParticipantView, ParticipantView } from '../utils/eventData';
 import { parseParticipantFragment } from '../utils/linkCodec';
@@ -133,12 +134,7 @@ export function ParticipantEvent() {
                   {load.view.details.title || t('events.untitled')}
                 </h1>
                 <p className="text-gray-700">{t('participant.welcome', { name: load.name })}</p>
-                {load.view.details.notes && (
-                  <div>
-                    <h2 className="text-sm font-medium text-gray-700 mb-1">{t('details.notes')}</h2>
-                    <p className="text-gray-700 whitespace-pre-wrap break-words">{load.view.details.notes}</p>
-                  </div>
-                )}
+                <EventDetailsBlock eventId={eventId} details={load.view.details} />
                 {!load.assignment && <p className="p-3 bg-gray-50 rounded text-gray-600">{t('participant.noDrawYet')}</p>}
                 {reveal.kind === 'error' && <p className="p-3 bg-gray-50 rounded text-gray-700">{t('participant.assignmentError')}</p>}
                 {reveal.kind === 'revealed' && (
