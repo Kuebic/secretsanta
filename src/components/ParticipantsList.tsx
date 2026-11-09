@@ -5,12 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { ParticipantRow } from './ParticipantRow';
 import { ParticipantsTextView } from './ParticipantsTextView';
 import { produce } from 'immer';
+import { mintParticipantId } from '../utils/eventCrypto';
 
 interface ParticipantsListProps {
   participants: Record<string, Participant>;
   onChangeParticipants: (newParticipants: Record<string, Participant>) => void;
   onOpenRules: (participantName: string) => void;
-  onGeneratePairs: () => void;
+  // Absent until draws move to the server (ticket 08).
+  onGeneratePairs?: () => void;
 }
 
 export function ParticipantsList({
@@ -20,11 +22,11 @@ export function ParticipantsList({
   onGeneratePairs,
 }: ParticipantsListProps) {
   const { t } = useTranslation();
-  const [nextParticipantId, setNextParticipantId] = useState(() => crypto.randomUUID());
+  const [nextParticipantId, setNextParticipantId] = useState(() => mintParticipantId());
 
   const updateParticipant = (id: string, name: string) => {
     if (id === nextParticipantId) {
-      setNextParticipantId(crypto.randomUUID());
+      setNextParticipantId(mintParticipantId());
     }
       
     onChangeParticipants(produce(participants, draft => {
@@ -53,9 +55,11 @@ export function ParticipantsList({
 
   return (
     <div className="space-y-4">
-      <p className="mt-1 text-xs text-gray-500">
-        {t('participants.generationWarning')}
-      </p>
+      {onGeneratePairs && (
+        <p className="mt-1 text-xs text-gray-500">
+          {t('participants.generationWarning')}
+        </p>
+      )}
 
       <div className="space-y-2">
         {participantsList.map((participant, index) => (
@@ -71,14 +75,16 @@ export function ParticipantsList({
         ))}
       </div>
 
-      <button
-        type="button"
-        onClick={onGeneratePairs}
-        className="w-full bg-green-500 text-white p-2 rounded hover:bg-blue-600 flex items-center justify-center gap-2"
-      >
-        <ArrowsClockwise size={20} weight="bold" />
-        {t('participants.generatePairs')}
-      </button>
+      {onGeneratePairs && (
+        <button
+          type="button"
+          onClick={onGeneratePairs}
+          className="w-full bg-green-500 text-white p-2 rounded hover:bg-blue-600 flex items-center justify-center gap-2"
+        >
+          <ArrowsClockwise size={20} weight="bold" />
+          {t('participants.generatePairs')}
+        </button>
+      )}
     </div>
   );
 }

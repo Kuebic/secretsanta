@@ -1,3 +1,4 @@
+import { mintParticipantId } from './eventCrypto';
 import { Participant, Rule } from '../types';
 import { checkRules } from './generatePairs';
 
@@ -101,7 +102,7 @@ export function parseParticipantsText(input: string, existingParticipants?: Reco
       };
     }
 
-    const id = existingParticipants?.[name]?.id ?? crypto.randomUUID();
+    const id = existingParticipants?.[name]?.id ?? mintParticipantId();
     nameToId[name] = id;
     result[id] = { id, name, hint, rules: [] };
   }

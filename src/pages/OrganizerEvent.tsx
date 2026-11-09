@@ -1,0 +1,279 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { ArrowLeft, Code, Rows, Trash } from '@phosphor-icons/react';
+import { Accordion } from '../components/Accordion';
+import { AccordionContainer } from '../components/AccordionContainer';
+import { CopyButton } from '../components/CopyButton';
+import { Details } from '../components/Details';
+import { Layout } from '../components/Layout';
+import { PageTransition } from '../components/PageTransition';
+import { ParticipantsList } from '../components/ParticipantsList';
+import { ParticipantsTextView } from '../components/ParticipantsTextView';
+import { PostCard } from '../components/PostCard';
+import { RulesModal } from '../components/RulesModal';
+import { MenuItem } from '../components/SideMenu';
+import { ApiError, deleteEvent, fetchEvent, saveEvent } from '../api/events';
+import { Participants } from '../types';
+import { EventContent, EventDetails, openEvent, sealEvent, withParticipantTokens } from '../utils/eventData';
+import { buildOrganizerLink, OrganizerCredentials, parseOrganizerFragment } from '../utils/linkCodec';
+import { readLocalEvents, removeLocalEvent, upsertLocalEvent } from '../utils/localEvents';
+
+type LoadState =
+  | { kind: 'loading' }
+  | { kind: 'error'; messageKey: 'organizer.badLink' | 'organizer.notFound' | 'organizer.decryptError' | 'organizer.loadError' }
+  | { kind: 'ready'; createdAt: string };
+
+type SaveState = 'saved' | 'pending' | 'saving' | 'error' | 'tooLarge';
+
+const SAVE_DELAY_MS = 800;
+
+function rememberLocally(credentials: OrganizerCredentials, title: string, createdAt: string) {
+  upsertLocalEvent({ id: credentials.eventId, key: credentials.eventKey, organizerToken: credentials.organizerToken, title, createdAt });
+}
+
+export function OrganizerEvent() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { eventId = '' } = useParams();
+  const { hash } = useLocation();
+  // The fragment never reaches the server; it carries the key and the token.
+  const [credentials] = useState(() => parseOrganizerFragment(eventId, hash));
+
+  const [load, setLoad] = useState<LoadState>(() => credentials ? { kind: 'loading' } : { kind: 'error', messageKey: 'organizer.badLink' });
+  const [content, setContent] = useState<EventContent | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('saved');
+  const [isTextView, setIsTextView] = useState(false);
+  const [openSection, setOpenSection] = useState<'participants' | 'details'>('participants');
+  const [rulesParticipantId, setRulesParticipantId] = useState<string | null>(null);
+
+  // Bumped on every edit; a save only marks 'saved' if nothing changed meanwhile.
+  const revision = useRef(0);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    if (!credentials) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      let stored;
+      try {
+        stored = await fetchEvent(credentials.eventId);
+      } catch (error) {
+        console.error('Failed to load event:', error);
+        if (!cancelled) setLoad({ kind: 'error', messageKey: error instanceof ApiError && error.status === 404 ? 'organizer.notFound' : 'organizer.loadError' });
+        return;
+      }
+      let opened;
+      try {
+        opened = await openEvent(credentials, stored);
+      } catch (error) {
+        console.error('Failed to decrypt event:', error);
+        if (!cancelled) setLoad({ kind: 'error', messageKey: 'organizer.decryptError' });
+        return;
+      }
+      if (cancelled) return;
+      setContent(opened);
+      setLoad({ kind: 'ready', createdAt: stored.createdAt });
+      // Opening an organizer link on a fresh browser adds the event to its home page.
+      rememberLocally(credentials, opened.details.title, stored.createdAt);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [credentials]);
+
+  const save = useCallback((next: EventContent, createdAt: string) => {
+    if (!credentials) return;
+    const saving = revision.current;
+    saveQueue.current = saveQueue.current.then(async () => {
+      if (saving !== revision.current) return; // a newer edit will save itself
+      setSaveState('saving');
+      try {
+        await saveEvent(credentials.eventId, credentials.organizerToken, await sealEvent(credentials, next));
+        rememberLocally(credentials, next.details.title, createdAt);
+        if (saving === revision.current) setSaveState('saved');
+      } catch (error) {
+        console.error('Failed to save event:', error);
+        if (saving === revision.current) setSaveState(error instanceof ApiError && error.status === 413 ? 'tooLarge' : 'error');
+      }
+    });
+  }, [credentials]);
+
+  useEffect(() => {
+    if (!content || load.kind !== 'ready' || saveState !== 'pending') return;
+    const timer = setTimeout(() => save(content, load.createdAt), SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [content, load, saveState, save]);
+
+  useEffect(() => {
+    if (saveState === 'saved') return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [saveState]);
+
+  const edit = (change: (current: EventContent) => EventContent) => {
+    revision.current++;
+    setContent(current => current && change(current));
+    setSaveState('pending');
+  };
+
+  const setParticipants = (participants: Participants) => edit(current => ({
+    ...current,
+    participants,
+    participantTokens: withParticipantTokens(participants, current.participantTokens),
+  }));
+
+  const setDetails = (details: EventDetails) => edit(current => ({ ...current, details }));
+
+  const handleDelete = async () => {
+    if (!credentials || !window.confirm(t('organizer.deleteConfirm'))) return;
+    try {
+      await deleteEvent(credentials.eventId, credentials.organizerToken);
+    } catch (error) {
+      console.error('Failed to delete event:', error);
+      window.alert(t('organizer.deleteError'));
+      return;
+    }
+    removeLocalEvent(credentials.eventId);
+    navigate('/');
+  };
+
+  const menuItems = [
+    <MenuItem key={`back`} to="/" icon={<ArrowLeft weight={`bold`}/>}>
+      {t('organizer.allEvents')}
+    </MenuItem>,
+  ];
+
+  if (load.kind !== 'ready' || !content || !credentials) {
+    const isKnownLocally = readLocalEvents().some(event => event.id === eventId);
+    return (
+      <PageTransition>
+        <Layout menuItems={menuItems}>
+          <PostCard>
+            {load.kind === 'error' ? (
+              <div className="space-y-4">
+                <p className="text-gray-700">{t(load.messageKey)}</p>
+                {load.kind === 'error' && load.messageKey === 'organizer.notFound' && isKnownLocally && (
+                  <button
+                    type="button"
+                    onClick={() => { removeLocalEvent(eventId); navigate('/'); }}
+                    className="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm"
+                  >
+                    {t('organizer.removeFromBrowser')}
+                  </button>
+                )}
+                <Link className="block text-blue-500 underline" to="/">{t('organizer.allEvents')}</Link>
+              </div>
+            ) : (
+              <p className="text-gray-600">{t('organizer.loading')}</p>
+            )}
+          </PostCard>
+        </Layout>
+      </PageTransition>
+    );
+  }
+
+  const toggleViewButton = (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsTextView(!isTextView);
+      }}
+      className="p-2 text-gray-200 hover:bg-gray-700 rounded-full"
+      title={t(isTextView ? 'participants.switchToFormView' : 'participants.switchToTextView')}
+    >
+      {isTextView ? <Rows size={20} weight={`bold`} /> : <Code size={20} weight={`bold`} />}
+    </button>
+  );
+
+  const saveMessage = {
+    saved: t('organizer.saved'),
+    pending: t('organizer.saving'),
+    saving: t('organizer.saving'),
+    error: t('organizer.saveError'),
+    tooLarge: t('organizer.saveTooLarge'),
+  }[saveState];
+
+  return <>
+    <PageTransition>
+      <Layout menuItems={menuItems}>
+        <div className="lg:flex-[6_6_0%]">
+          <PostCard>
+            <div className="space-y-4">
+              <h1 className="text-xl sm:text-2xl font-bold mb-4 text-red-700 break-words">
+                {content.details.title || t('events.untitled')}
+              </h1>
+              <p className="text-sm text-gray-600">{t('organizer.organizerLinkHelp')}</p>
+              <CopyButton
+                textToCopy={buildOrganizerLink(window.location.origin, credentials)}
+                className="w-full p-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center gap-2"
+              >
+                {t('organizer.copyOrganizerLink')}
+              </CopyButton>
+              <div className={`flex items-center gap-2 text-sm ${saveState === 'error' || saveState === 'tooLarge' ? 'text-red-700' : 'text-gray-500'}`}>
+                <span role="status">{saveMessage}</span>
+                {saveState === 'error' && (
+                  <button type="button" className="underline" onClick={() => save(content, load.createdAt)}>
+                    {t('organizer.retry')}
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-3 py-2 text-sm text-red-700 border border-red-300 rounded hover:bg-red-50 flex items-center gap-2"
+              >
+                <Trash size={16} weight="bold" />
+                {t('organizer.deleteEvent')}
+              </button>
+            </div>
+          </PostCard>
+        </div>
+
+        <div className="lg:order-none lg:flex-[5_5_0%]">
+          <AccordionContainer>
+            <Accordion
+              title={t('participants.title')}
+              isOpen={openSection === 'participants'}
+              onToggle={() => setOpenSection('participants')}
+              action={toggleViewButton}
+            >
+              {isTextView ? (
+                <ParticipantsTextView
+                  participants={content.participants}
+                  onChangeParticipants={setParticipants}
+                />
+              ) : (
+                <ParticipantsList
+                  participants={content.participants}
+                  onChangeParticipants={setParticipants}
+                  onOpenRules={setRulesParticipantId}
+                />
+              )}
+            </Accordion>
+
+            <Accordion
+              title={t('details.title')}
+              isOpen={openSection === 'details'}
+              onToggle={() => setOpenSection('details')}
+            >
+              <Details details={content.details} onChangeDetails={setDetails} />
+            </Accordion>
+          </AccordionContainer>
+        </div>
+      </Layout>
+    </PageTransition>
+    {rulesParticipantId && (
+      <RulesModal
+        isOpen
+        onClose={() => setRulesParticipantId(null)}
+        participants={content.participants}
+        participantId={rulesParticipantId}
+        onChangeParticipants={setParticipants}
+      />
+    )}
+  </>;
+}

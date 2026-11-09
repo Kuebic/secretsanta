@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider, useNavigate, useSearchParams } from "react-router-dom";
 import { Home } from './pages/Home';
 import { Pairing } from './pages/Pairing';
+import { OrganizerEvent } from './pages/OrganizerEvent';
 import { useEffect } from 'react';
 
 function Redirect({ to }: { to: string }) {
@@ -22,6 +23,9 @@ function Redirect({ to }: { to: string }) {
 const router = createBrowserRouter([{
   path: "/",
   element: <Home />,
+}, {
+  path: "/o/:eventId",
+  element: <OrganizerEvent />,
 }, {
   path: "/pairing",
   element: <Pairing />,

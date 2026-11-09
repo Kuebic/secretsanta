@@ -1,110 +1,53 @@
 import { useState } from 'react';
-import { RulesModal } from '../components/RulesModal';
-import { GeneratedPairs, generatePairs } from '../utils/generatePairs';
-import { Accordion } from '../components/Accordion';
-import { AccordionContainer } from '../components/AccordionContainer';
-import { ParticipantsList } from '../components/ParticipantsList';
-import { ParticipantsTextView } from '../components/ParticipantsTextView';
-import { SecretSantaLinks } from '../components/SecretSantaLinks';
-import { Participant, Rule } from '../types';
-import { Link } from 'react-router-dom';
-import { PostCard } from '../components/PostCard';
+import { Link, useNavigate } from 'react-router-dom';
 import { Trans, useTranslation } from 'react-i18next';
+import { Heart, Plus, Star } from '@phosphor-icons/react';
+import { PostCard } from '../components/PostCard';
 import { MenuItem } from '../components/SideMenu';
 import { PageTransition } from '../components/PageTransition';
-import { Code, Heart, Rows, Star } from '@phosphor-icons/react';
-import { Settings } from '../components/Settings';
-import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Layout } from '../components/Layout';
+import { CopyButton } from '../components/CopyButton';
+import { saveEvent } from '../api/events';
+import { mintEvent } from '../utils/eventCrypto';
+import { EMPTY_DETAILS, sealEvent } from '../utils/eventData';
+import { buildOrganizerLink } from '../utils/linkCodec';
+import { LocalEvent, upsertLocalEvent, useLocalEvents } from '../utils/localEvents';
 
-function migrateParticipants(value: any) {
-  // The first release of the new tool used an array of participants.
-  if (Array.isArray(value)) {
-    const migrated: Record<string, Participant> = {};
-    const ids = new Map<string, string>();
-
-    for (const participant of value) {
-      const id = crypto.randomUUID();
-      ids.set(participant.name, id);
-    }
-
-    for (const participant of value) {
-      const id = ids.get(participant.name)!;
-
-      migrated[id] = {
-        id,
-        name: participant.name,
-        rules: participant.rules.map(({type, targetParticipant}: {type: string, targetParticipant: string}) => {
-          const targetParticipantId = ids.get(targetParticipant);
-          return targetParticipantId ? {type, targetParticipantId} : null;
-        }).filter((rule: any): rule is Rule => {
-          return !!rule;
-        }),
-      };
-
-      console.log(migrated);
-    }
-
-    return migrated;
-  }
-
-  return value;
+function organizerLink(event: LocalEvent): string {
+  return buildOrganizerLink(window.location.origin, { eventId: event.id, eventKey: event.key, organizerToken: event.organizerToken });
 }
 
-function migrateAssignments(value: any) {
-  if (Array.isArray(value)) {
-    if (value.length === 0) {
-      return null;
-    }
-
-    console.log({
-      hash: ``,
-      pairings: value.map(([giver, receiver]) => ({
-        giver: {id: ``, name: giver},
-        receiver: {id: ``, name: receiver},
-      })),
-    });
-
-    return {
-      hash: ``,
-      pairings: value.map(([giver, receiver]) => ({
-        giver: {id: ``, name: giver},
-        receiver: {id: ``, name: receiver},
-      })),
-    };
-  }
-
-  return value;
+function organizerPath(event: LocalEvent): string {
+  return organizerLink(event).slice(window.location.origin.length);
 }
 
 export function Home() {
-  const { t } = useTranslation();
-  const [isTextView, setIsTextView] = useState(false);
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  const events = useLocalEvents();
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState(false);
 
-  const [participants, setParticipants] = useLocalStorage<Record<string, Participant>>('secretSantaParticipants', {}, migrateParticipants);
-  const [assignments, setAssignments] = useLocalStorage<GeneratedPairs | null>('secretSantaAssignments', null, migrateAssignments);
-  const [instructions, setInstructions] = useLocalStorage<string>('secretSantaInstructions', '');
-
-  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
-  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
-  const [openSection, setOpenSection] = useState<'participants' | 'links' | 'settings'>('participants');
-
-  const handleGeneratePairs = () => {
-    const assignments = generatePairs(participants);
-    if (assignments === null) {
-      alert(Object.keys(participants).length < 2 
-        ? t('errors.needMoreParticipants')
-        : t('errors.invalidPairs')
-      );
-      return;
+  const handleNewEvent = async () => {
+    setIsCreating(true);
+    setCreateError(false);
+    try {
+      const minted = mintEvent([]);
+      const credentials = { eventId: minted.eventId, eventKey: minted.eventKey, organizerToken: minted.organizerToken };
+      const sealed = await sealEvent(credentials, { details: EMPTY_DETAILS, participants: {}, participantTokens: {} });
+      const { createdAt } = await saveEvent(minted.eventId, minted.organizerToken, sealed);
+      const event: LocalEvent = { id: minted.eventId, key: minted.eventKey, organizerToken: minted.organizerToken, title: '', createdAt };
+      upsertLocalEvent(event);
+      navigate(organizerPath(event));
+    } catch (error) {
+      console.error('Failed to create event:', error);
+      setCreateError(true);
+      setIsCreating(false);
     }
-
-    setAssignments(assignments);
-    setOpenSection('links');
   };
 
   const menuItems = [
-    <div className="flex flex-col space-y-2 lg:flex-row lg:space-y-0 lg:space-x-2">
+    <div key={`links`} className="flex flex-col space-y-2 lg:flex-row lg:space-y-0 lg:space-x-2">
       <MenuItem key={`vanity`} to="https://bsky.app/profile/mael.dev" icon={<Star className={`text-orange-500`} weight={`fill`}/>}>
         {t(`home.vanity`)}
       </MenuItem>
@@ -114,20 +57,9 @@ export function Home() {
     </div>,
   ];
 
-  const toggleViewButton = (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        setIsTextView(!isTextView);
-      }}
-      className="p-2 text-gray-200 hover:bg-gray-700 rounded-full"
-      title={t(isTextView ? 'participants.switchToFormView' : 'participants.switchToTextView')}
-    >
-      {isTextView ? <Rows size={20} weight={`bold`} /> : <Code size={20} weight={`bold`} />}
-    </button>
-  );
+  const sortedEvents = [...events].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  return <>
+  return (
     <PageTransition>
       <Layout menuItems={menuItems}>
         <div className="lg:flex-[6_6_0%]">
@@ -150,70 +82,53 @@ export function Home() {
           </PostCard>
         </div>
 
-        <div className="lg:order-none lg:flex-[5_5_0%]">
-          <AccordionContainer>
-            <Accordion
-              title={t('participants.title')}
-              isOpen={openSection === 'participants'}
-              onToggle={() => setOpenSection('participants')}
-              action={toggleViewButton}
-            >
-              {isTextView ? (
-                <ParticipantsTextView
-                  participants={participants}
-                  onChangeParticipants={setParticipants}
-                  onGeneratePairs={handleGeneratePairs}
-                />
-              ) : (
-                <ParticipantsList
-                  participants={participants}
-                  onChangeParticipants={setParticipants}
-                  onOpenRules={(id) => {
-                    setSelectedParticipantId(id);
-                    setIsRulesModalOpen(true);
-                  }}
-                  onGeneratePairs={handleGeneratePairs}
-                />
-              )}
-            </Accordion>
+        <div className="lg:flex-[5_5_0%] space-y-4">
+          <div className="bg-postcard-nowhite rounded-lg px-5 py-3 text-white">
+            <h2 className="text-xl">{t('events.title')}</h2>
+          </div>
 
-            <Accordion
-              title={t('settings.title')}
-              isOpen={openSection === 'settings'}
-              onToggle={() => setOpenSection('settings')}
-            >
-              <Settings
-                instructions={instructions}
-                onChangeInstructions={setInstructions}
-              />
-            </Accordion>
+          {sortedEvents.length === 0 ? (
+            <p className="p-4 bg-gray-50 rounded-lg text-gray-600">{t('events.empty')}</p>
+          ) : (
+            <ul className="space-y-2">
+              {sortedEvents.map(event => (
+                <li key={event.id} className="p-4 bg-gray-50 rounded-lg flex items-center gap-4">
+                  <Link to={organizerPath(event)} className="flex-1 min-w-0">
+                    <div className="font-medium truncate text-gray-800 hover:underline">
+                      {event.title || t('events.untitled')}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {t('events.createdOn', { date: new Date(event.createdAt).toLocaleDateString(i18n.language) })}
+                    </div>
+                  </Link>
+                  <CopyButton
+                    textToCopy={organizerLink(event)}
+                    className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex flex-none items-center justify-center gap-2 text-sm"
+                  >
+                    {t('events.copyOrganizerLink')}
+                  </CopyButton>
+                </li>
+              ))}
+            </ul>
+          )}
 
-            {assignments && (
-              <Accordion
-                title={t('links.title')}
-                isOpen={openSection === 'links'}
-                onToggle={() => setOpenSection('links')}
-              >
-                <SecretSantaLinks
-                  assignments={assignments}
-                  instructions={instructions}
-                  participants={participants}
-                  onGeneratePairs={handleGeneratePairs}
-                />
-              </Accordion>
-            )}
-          </AccordionContainer>
+          {createError && (
+            <p className="p-3 bg-red-100 text-red-700 text-sm rounded">{t('events.createError')}</p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleNewEvent}
+            disabled={isCreating}
+            className="w-full bg-green-500 text-white p-2 rounded hover:bg-green-600 disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            <Plus size={20} weight="bold" />
+            {t(isCreating ? 'events.creating' : 'events.newEvent')}
+          </button>
+
+          <p className="text-xs text-gray-500">{t('events.keepLinkHint')}</p>
         </div>
       </Layout>
     </PageTransition>
-    {isRulesModalOpen && selectedParticipantId && (
-      <RulesModal
-        isOpen={isRulesModalOpen}
-        onClose={() => setIsRulesModalOpen(false)}
-        participants={participants}
-        participantId={selectedParticipantId}
-        onChangeParticipants={setParticipants}
-      />
-    )}
-  </>;
+  );
 }
