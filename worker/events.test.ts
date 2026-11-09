@@ -8,6 +8,7 @@ const MAX_BLOB_BYTES_PLUS_ONE = 16 * 1024 + 1;
 interface StoredEntry {
   value: string;
   expirationTtl?: number;
+  expiration?: number;
   metadata?: unknown;
   writes: number;
 }
@@ -20,7 +21,11 @@ function makeKv() {
     async get(key: string) {
       return store.get(key)?.value ?? null;
     },
-    async put(key: string, value: string, options: { expirationTtl?: number; metadata?: unknown } = {}) {
+    async getWithMetadata(key: string) {
+      const entry = store.get(key);
+      return { value: entry?.value ?? null, metadata: entry?.metadata ?? null };
+    },
+    async put(key: string, value: string, options: { expirationTtl?: number; expiration?: number; metadata?: unknown } = {}) {
       store.set(key, { value, ...options, writes: (store.get(key)?.writes ?? 0) + 1 });
     },
     async delete(key: string) {
@@ -32,7 +37,7 @@ function makeKv() {
       const start = cursor ? Number(cursor) : 0;
       const page = names.slice(start, start + 2);
       const done = start + 2 >= names.length;
-      return { keys: page.map(name => ({ name })), list_complete: done, cursor: done ? undefined : String(start + 2) };
+      return { keys: page.map(name => ({ name, metadata: store.get(name)!.metadata })), list_complete: done, cursor: done ? undefined : String(start + 2) };
     },
   };
 }
@@ -308,8 +313,8 @@ describe('events API: assignments', () => {
       body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } },
     });
     expect(response.status).toBe(200);
-    expect(await (await call('GET', assignmentPath(P1))).json()).toEqual({ assignment: blob(64, 'A') });
-    expect(await (await call('GET', assignmentPath(P2))).json()).toEqual({ assignment: blob(64, 'B') });
+    expect(await (await call('GET', assignmentPath(P1))).json()).toMatchObject({ assignment: blob(64, 'A') });
+    expect(await (await call('GET', assignmentPath(P2))).json()).toMatchObject({ assignment: blob(64, 'B') });
     expect(kv.store.get(`event:${EVENT_ID}:p:${P1}:assignment`)!.expirationTtl).toBe(THIRTEEN_MONTHS);
   });
 
@@ -342,7 +347,7 @@ describe('events API: assignments', () => {
       call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments } });
     await put({ [P1]: blob(64, 'A'), [P2]: blob(64, 'B') });
     await put({ [P1]: blob(64, 'C') });
-    expect(await (await call('GET', assignmentPath(P1))).json()).toEqual({ assignment: blob(64, 'C') });
+    expect(await (await call('GET', assignmentPath(P1))).json()).toMatchObject({ assignment: blob(64, 'C') });
     expect((await call('GET', assignmentPath(P2))).status).toBe(404);
   });
 
@@ -353,5 +358,90 @@ describe('events API: assignments', () => {
     });
     expect(response.status).toBe(404);
     expect((await call('GET', assignmentPath(P1))).status).toBe(404);
+  });
+});
+
+describe('events API: opened', () => {
+  const assignmentPath = (pid: string) => `/api/events/${EVENT_ID}/participants/${pid}/assignment`;
+  const openedPath = (pid: string) => `/api/events/${EVENT_ID}/participants/${pid}/opened`;
+  const draw = (assignments: Record<string, string>) =>
+    call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments } });
+
+  it('records openedAt when the giver opens their assignment with their own participant token', async () => {
+    await createEvent();
+    await draw({ [P1]: blob(64, 'A'), [P2]: blob(64, 'B') });
+    expect((await (await call('GET', assignmentPath(P1))).json()).openedAt).toBeUndefined();
+
+    const response = await call('POST', openedPath(P1), { token: 't1' });
+    expect(response.status).toBe(200);
+    const { openedAt } = await response.json();
+    expect(Date.parse(openedAt)).not.toBeNaN();
+    expect(await (await call('GET', assignmentPath(P1))).json()).toMatchObject({ assignment: blob(64, 'A'), openedAt });
+    expect((await (await call('GET', assignmentPath(P2))).json()).openedAt).toBeUndefined();
+  });
+
+  it('refuses to mark opened with another participant\'s token, the organizer token, or no token', async () => {
+    await createEvent();
+    await draw({ [P1]: blob(64, 'A'), [P2]: blob(64, 'B') });
+    expect((await call('POST', openedPath(P1), { token: 't2' })).status).toBe(403);
+    expect((await call('POST', openedPath(P1), { token: ORGANIZER_TOKEN })).status).toBe(403);
+    expect((await call('POST', openedPath(P1))).status).toBe(401);
+    expect((await (await call('GET', assignmentPath(P1))).json()).openedAt).toBeUndefined();
+  });
+
+  it('answers 404 when there is no assignment to open', async () => {
+    await createEvent();
+    expect((await call('POST', openedPath(P1), { token: 't1' })).status).toBe(404);
+  });
+
+  it('a new draw that changes an assignment moves assignedAt past openedAt; an unchanged one keeps both', async () => {
+    await createEvent();
+    await draw({ [P1]: blob(64, 'A'), [P2]: blob(64, 'B') });
+    await call('POST', openedPath(P1), { token: 't1' });
+    await call('POST', openedPath(P2), { token: 't2' });
+    const before = await (await call('GET', assignmentPath(P2))).json();
+    await new Promise(resolve => setTimeout(resolve, 5));
+
+    await draw({ [P1]: blob(64, 'C'), [P2]: blob(64, 'B') });
+    const changed = await (await call('GET', assignmentPath(P1))).json();
+    expect(Date.parse(changed.assignedAt)).toBeGreaterThan(Date.parse(changed.openedAt));
+    expect(await (await call('GET', assignmentPath(P2))).json()).toEqual(before);
+  });
+
+  it('lists each participant\'s assignedAt and openedAt with the event, without auth', async () => {
+    await createEvent();
+    await draw({ [P1]: blob(64, 'A'), [P2]: blob(64, 'B') });
+    await call('POST', openedPath(P1), { token: 't1' });
+    const { status } = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
+    expect(Object.keys(status).sort()).toEqual([P1, P2].sort());
+    expect(typeof status[P1].openedAt).toBe('string');
+    expect(typeof status[P1].assignedAt).toBe('string');
+    expect(status[P2].openedAt).toBeUndefined();
+    expect(typeof status[P2].assignedAt).toBe('string');
+  });
+
+  it('lists an empty status before any draw', async () => {
+    await createEvent();
+    const { status } = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
+    expect(status).toEqual({ [P1]: {}, [P2]: {} });
+  });
+
+  it('stores only ciphertext and timestamps for assignments, and opening does not outlive the event', async () => {
+    await createEvent();
+    await draw({ [P1]: blob(64, 'A'), [P2]: blob(64, 'B') });
+    await call('POST', openedPath(P1), { token: 't1' });
+    const metaEntry = kv.store.get(`event:${EVENT_ID}:meta`)!;
+    for (const [pid, value] of [[P1, blob(64, 'A')], [P2, blob(64, 'B')]]) {
+      const entry = kv.store.get(`event:${EVENT_ID}:p:${pid}:assignment`)!;
+      expect(entry.value).toBe(value);
+      for (const [field, stamp] of Object.entries(entry.metadata as Record<string, unknown>)) {
+        expect(['assignedAt', 'openedAt']).toContain(field);
+        expect(Date.parse(stamp as string)).not.toBeNaN();
+      }
+    }
+    // A participant write must not extend the entry beyond the event's own expiry.
+    const opened = kv.store.get(`event:${EVENT_ID}:p:${P1}:assignment`)!;
+    const updatedAt = JSON.parse(metaEntry.value).updatedAt;
+    expect(opened.expiration).toBe(Math.floor(Date.parse(updatedAt) / 1000) + THIRTEEN_MONTHS);
   });
 });

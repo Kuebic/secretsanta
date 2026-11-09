@@ -8,10 +8,11 @@ export interface AssetsBinding {
 
 export interface KVNamespaceLike {
   get(key: string): Promise<string | null>;
-  put(key: string, value: string, options?: { expirationTtl?: number; metadata?: unknown }): Promise<void>;
+  getWithMetadata(key: string): Promise<{ value: string | null; metadata: unknown }>;
+  put(key: string, value: string, options?: { expirationTtl?: number; expiration?: number; metadata?: unknown }): Promise<void>;
   delete(key: string): Promise<void>;
   list(options?: { prefix?: string; cursor?: string }): Promise<{
-    keys: { name: string }[];
+    keys: { name: string; metadata?: unknown }[];
     list_complete: boolean;
     cursor?: string;
   }>;

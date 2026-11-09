@@ -70,3 +70,14 @@ export async function decryptBlob(key: string, blob: string): Promise<string> {
   );
   return new TextDecoder().decode(plaintext);
 }
+
+// ADR 0003: an assignment (the receiver's participant ID) is sealed with
+// HKDF(eventKey, giver's participant token, "assignment"), so only that
+// giver's link opens it; the server and other participants cannot.
+export async function sealAssignment(eventKey: string, participantToken: string, receiverId: string): Promise<string> {
+  return encryptBlob(await deriveKey(eventKey, participantToken, 'assignment'), receiverId);
+}
+
+export async function openAssignment(eventKey: string, participantToken: string, sealed: string): Promise<string> {
+  return decryptBlob(await deriveKey(eventKey, participantToken, 'assignment'), sealed);
+}

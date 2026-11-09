@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decryptBlob, deriveKey, encryptBlob, mintEvent, mintParticipantId, mintToken } from './eventCrypto';
+import { decryptBlob, deriveKey, encryptBlob, mintEvent, mintParticipantId, mintToken, openAssignment, sealAssignment } from './eventCrypto';
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
@@ -61,5 +61,21 @@ describe('event crypto', () => {
     const { eventKey, organizerToken } = mintEvent([]);
     const blob = await encryptBlob(await deriveKey(eventKey, organizerToken, 'organizer'), 'x');
     await expect(decryptBlob(await deriveKey(eventKey, organizerToken, 'assignment'), blob)).rejects.toThrow();
+  });
+});
+
+describe('assignments', () => {
+  it('the giver whose token sealed an assignment opens it; another participant\'s token cannot', async () => {
+    const { eventKey, participantTokens } = mintEvent(['giver', 'other']);
+    const sealed = await sealAssignment(eventKey, participantTokens.giver, 'receiver-id');
+    expect(sealed).not.toContain('receiver-id');
+    expect(await openAssignment(eventKey, participantTokens.giver, sealed)).toBe('receiver-id');
+    await expect(openAssignment(eventKey, participantTokens.other, sealed)).rejects.toThrow();
+  });
+
+  it('the event key alone does not open an assignment', async () => {
+    const { eventKey, participantTokens } = mintEvent(['giver']);
+    const sealed = await sealAssignment(eventKey, participantTokens.giver, 'receiver-id');
+    await expect(decryptBlob(eventKey, sealed)).rejects.toThrow();
   });
 });

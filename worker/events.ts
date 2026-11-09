@@ -28,6 +28,14 @@ interface StoredRoster {
   participantTokenHashes: Record<string, string>;
 }
 
+// Plaintext KV metadata of an assignment: timing only (ADR 0002).
+// assignedAt moves when a draw changes the ciphertext; openedAt when the
+// giver opens it.
+interface AssignmentStatus {
+  assignedAt?: string;
+  openedAt?: string;
+}
+
 class HttpError extends Error {
   constructor(readonly status: number, readonly code: string) {
     super(code);
@@ -122,15 +130,17 @@ async function readMeta(env: Env, id: string): Promise<Meta | null> {
 }
 
 // Missing token: 401. Token that does not hash to the stored one: 403.
-async function authorizeOrganizer(request: Request, meta: Meta): Promise<void> {
+async function authorizeToken(request: Request, expectedHash: string | undefined): Promise<void> {
   const token = bearerToken(request);
   if (!token) {
     throw new HttpError(401, 'unauthorized');
   }
-  if (!constantTimeEqual(await hashToken(token), meta.organizerTokenHash)) {
+  if (expectedHash === undefined || !constantTimeEqual(await hashToken(token), expectedHash)) {
     throw new HttpError(403, 'forbidden');
   }
 }
+
+const authorizeOrganizer = (request: Request, meta: Meta) => authorizeToken(request, meta.organizerTokenHash);
 
 async function requireEvent(env: Env, id: string): Promise<Meta> {
   const meta = await readMeta(env, id);
@@ -178,6 +188,37 @@ async function putEvent(request: Request, env: Env, id: string): Promise<Respons
   return json({ createdAt: meta.createdAt, updatedAt: meta.updatedAt }, existing ? 200 : 201);
 }
 
+// Per-participant status for every roster entry, read from KV metadata in
+// one prefix listing.
+async function readStatus(env: Env, id: string, roster: StoredRoster): Promise<Record<string, AssignmentStatus>> {
+  const status: Record<string, AssignmentStatus> = Object.fromEntries(
+    Object.keys(roster.participantTokenHashes).map(pid => [pid, {}]),
+  );
+  const prefix = `${keys.prefix(id)}p:`;
+  let cursor: string | undefined;
+  do {
+    const page = await env.EVENTS.list({ prefix, cursor });
+    for (const { name, metadata } of page.keys) {
+      const [pid, kind] = name.slice(prefix.length).split(':');
+      if (kind === 'assignment' && pid in status) {
+        Object.assign(status[pid], assignmentStatus(metadata));
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return status;
+}
+
+function assignmentStatus(metadata: unknown): AssignmentStatus {
+  const status: AssignmentStatus = {};
+  if (metadata && typeof metadata === 'object') {
+    const { assignedAt, openedAt } = metadata as Record<string, unknown>;
+    if (typeof assignedAt === 'string') status.assignedAt = assignedAt;
+    if (typeof openedAt === 'string') status.openedAt = openedAt;
+  }
+  return status;
+}
+
 async function getEvent(env: Env, id: string): Promise<Response> {
   const meta = await requireEvent(env, id);
   const { details, roster } = await readStored(env, id);
@@ -187,6 +228,7 @@ async function getEvent(env: Env, id: string): Promise<Response> {
     organizer: roster.organizer,
     createdAt: meta.createdAt,
     updatedAt: meta.updatedAt,
+    status: await readStatus(env, id, roster),
   });
 }
 
@@ -240,8 +282,17 @@ async function putAssignments(request: Request, env: Env, id: string): Promise<R
     assignments.push([pid, ciphertext(value)]);
   }
   const drawn = new Set(assignments.map(([pid]) => pid));
+  const now = new Date().toISOString();
+  // A giver whose ciphertext is resent unchanged keeps assignedAt and
+  // openedAt, so "this changed" only shows when their receiver changed.
+  const write = async ([pid, value]: [string, string]) => {
+    const existing = await env.EVENTS.getWithMetadata(keys.assignment(id, pid));
+    const status = assignmentStatus(existing.metadata);
+    const metadata = existing.value === value && status.assignedAt ? status : { ...status, assignedAt: now };
+    await env.EVENTS.put(keys.assignment(id, pid), value, { expirationTtl: EVENT_TTL_SECONDS, metadata });
+  };
   await Promise.all([
-    ...assignments.map(([pid, value]) => put(env, keys.assignment(id, pid), value)),
+    ...assignments.map(write),
     ...Object.keys(roster.participantTokenHashes)
       .filter(pid => !drawn.has(pid))
       .map(pid => env.EVENTS.delete(keys.assignment(id, pid))),
@@ -251,11 +302,30 @@ async function putAssignments(request: Request, env: Env, id: string): Promise<R
 
 async function getAssignment(env: Env, id: string, pid: string): Promise<Response> {
   await requireEvent(env, id);
-  const assignment = await env.EVENTS.get(keys.assignment(id, pid));
-  if (assignment === null) {
+  const { value, metadata } = await env.EVENTS.getWithMetadata(keys.assignment(id, pid));
+  if (value === null) {
     throw new HttpError(404, 'not_found');
   }
-  return json({ assignment });
+  return json({ assignment: value, ...assignmentStatus(metadata) });
+}
+
+// The giver, with their own participant token, records that they opened
+// their assignment. The entry keeps the event's expiry: a participant write
+// does not refresh the TTL.
+async function postOpened(request: Request, env: Env, id: string, pid: string): Promise<Response> {
+  const meta = await requireEvent(env, id);
+  const { roster } = await readStored(env, id);
+  await authorizeToken(request, roster.participantTokenHashes[pid]);
+  const { value, metadata } = await env.EVENTS.getWithMetadata(keys.assignment(id, pid));
+  if (value === null) {
+    throw new HttpError(404, 'not_found');
+  }
+  const openedAt = new Date().toISOString();
+  await env.EVENTS.put(keys.assignment(id, pid), value, {
+    expiration: Math.floor(Date.parse(meta.updatedAt) / 1000) + EVENT_TTL_SECONDS,
+    metadata: { ...assignmentStatus(metadata), openedAt },
+  });
+  return json({ openedAt });
 }
 
 // Removes everything under the event's prefix, including entries later
@@ -287,6 +357,9 @@ export async function handleEvents(request: Request, env: Env, path: string[]): 
       const [pid, sub] = rest;
       if (request.method === 'GET' && sub === 'assignment') {
         return await getAssignment(env, id, pid);
+      }
+      if (request.method === 'POST' && sub === 'opened') {
+        return await postOpened(request, env, id, pid);
       }
       throw new HttpError(404, 'not_found');
     }
