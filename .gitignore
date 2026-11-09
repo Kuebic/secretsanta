@@ -14,3 +14,8 @@
 
 node_modules
 dist
+
+# sandcastle
+.sandcastle/.env
+.sandcastle/logs/
+.sandcastle/worktrees/

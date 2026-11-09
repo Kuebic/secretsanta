@@ -1,0 +1,19 @@
+# 08: Assignments on the server, envelope reveal, opened tracking
+
+**What to build:** When the organizer draws, each assignment is encrypted so only that giver can read it and stored on the server. A participant who confirms identity sees an envelope animation and their receiver's name. The server records when they opened it. The organizer sees how many have opened, gets a warning before re-drawing once anyone has, and sees the full pairings only behind a "Reveal pairings" toggle (CSV export lives behind it too).
+
+Key derivation per ADR 0003: assignment key = HKDF(eventKey, participantToken).
+
+**Blocked by:** 07
+
+**Status:** ready-for-agent
+
+**GitHub:** Kuebic/secretsanta#8
+
+- [ ] Draw writes one encrypted assignment per giver under the organizer token; participant with their link decrypts theirs; another participant's link cannot
+- [ ] Participant page after Yes: envelope opens, receiver name shown; `openedAt` set via participant token
+- [ ] If the assignment changed since last opened, a "this changed" banner shows
+- [ ] Organizer: opened count visible; re-draw shows a warning naming how many have opened
+- [ ] Pairings table hidden by default; "Reveal pairings" toggle shows table + CSV export
+- [ ] Adding a participant after a draw mints their link immediately and flags the draw as stale (existing warning)
+- [ ] Tests: wrong token cannot decrypt, server stores only ciphertext and timestamps

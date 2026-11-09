@@ -1,7 +1,6 @@
 {
   "name": "secretsanta",
   "private": true,
-  "packageManager": "yarn@4.5.1",
   "dependencies": {
     "@fontsource/cherry-swash": "^5.1.0",
     "@fontsource/dancing-script": "^5.1.0",
@@ -21,6 +20,7 @@
     "vitest": "^2.1.5"
   },
   "devDependencies": {
+    "@ai-hero/sandcastle": "^0.14.0",
     "@types/crypto-js": "^3",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -29,7 +29,16 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3",
     "vite": "^6.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p .",
+    "sandcastle": "tsx .sandcastle/main.ts"
   }
 }
