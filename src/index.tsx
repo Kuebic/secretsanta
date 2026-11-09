@@ -7,6 +7,7 @@ import { createBrowserRouter, RouterProvider, useNavigate, useSearchParams } fro
 import { Home } from './pages/Home';
 import { Pairing } from './pages/Pairing';
 import { OrganizerEvent } from './pages/OrganizerEvent';
+import { ParticipantEvent } from './pages/ParticipantEvent';
 import { useEffect } from 'react';
 import { migrateLegacyStorage } from './utils/legacyStorage';
 
@@ -27,6 +28,9 @@ const router = createBrowserRouter([{
 }, {
   path: "/o/:eventId",
   element: <OrganizerEvent />,
+}, {
+  path: "/p/:eventId/:participantId",
+  element: <ParticipantEvent />,
 }, {
   path: "/pairing",
   element: <Pairing />,

@@ -17,7 +17,7 @@ import { MenuItem } from '../components/SideMenu';
 import { ApiError, deleteEvent, fetchEvent, saveEvent } from '../api/events';
 import { Participants } from '../types';
 import { EventContent, EventDetails, openEvent, sealEvent, withParticipantTokens } from '../utils/eventData';
-import { buildOrganizerLink, OrganizerCredentials, parseOrganizerFragment } from '../utils/linkCodec';
+import { buildOrganizerLink, buildParticipantLink, OrganizerCredentials, parseOrganizerFragment } from '../utils/linkCodec';
 import { readLocalEvents, removeLocalEvent, upsertLocalEvent } from '../utils/localEvents';
 
 type LoadState =
@@ -45,7 +45,7 @@ export function OrganizerEvent() {
   const [content, setContent] = useState<EventContent | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [isTextView, setIsTextView] = useState(false);
-  const [openSection, setOpenSection] = useState<'participants' | 'details'>('participants');
+  const [openSection, setOpenSection] = useState<'participants' | 'details' | 'links'>('participants');
   const [rulesParticipantId, setRulesParticipantId] = useState<string | null>(null);
   const [isPreviousDrawOpen, setIsPreviousDrawOpen] = useState(false);
 
@@ -272,6 +272,35 @@ export function OrganizerEvent() {
             >
               <Details details={content.details} onChangeDetails={setDetails} />
             </Accordion>
+
+            {Object.keys(content.participants).length > 0 && (
+              <Accordion
+                title={t('organizer.participantLinksTitle')}
+                isOpen={openSection === 'links'}
+                onToggle={() => setOpenSection('links')}
+              >
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">{t('organizer.participantLinksHelp')}</p>
+                  {saveState !== 'saved' && (
+                    <p className="text-xs text-gray-500">{t('organizer.participantLinksUnsaved')}</p>
+                  )}
+                  {Object.values(content.participants).map(participant => (
+                    <CopyButton
+                      key={participant.id}
+                      textToCopy={buildParticipantLink(window.location.origin, {
+                        eventId: credentials.eventId,
+                        participantId: participant.id,
+                        eventKey: credentials.eventKey,
+                        participantToken: content.participantTokens[participant.id],
+                      })}
+                      className="w-full p-2 border border-gray-300 rounded hover:bg-gray-50 flex items-center justify-center gap-2"
+                    >
+                      {t('organizer.copyParticipantLink', { name: participant.name })}
+                    </CopyButton>
+                  ))}
+                </div>
+              </Accordion>
+            )}
           </AccordionContainer>
         </div>
       </Layout>

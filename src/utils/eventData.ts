@@ -82,3 +82,16 @@ export async function openEvent(
   }
   return { details, participants, participantTokens: withParticipantTokens(participants, organizer.participantTokens) };
 }
+
+// What a participant link can read: details and roster, both under the event
+// key. Rules and tokens stay in the organizer blob.
+export interface ParticipantView {
+  details: EventDetails;
+  names: Record<string, string>;
+}
+
+export async function openParticipantView(eventKey: string, sealed: { details: string; roster: string }): Promise<ParticipantView> {
+  const details = { ...EMPTY_DETAILS, ...JSON.parse(await decryptBlob(eventKey, sealed.details)) } as EventDetails;
+  const roster = JSON.parse(await decryptBlob(eventKey, sealed.roster)) as RosterPlaintext;
+  return { details, names: Object.fromEntries(Object.entries(roster).map(([id, { name }]) => [id, name])) };
+}
