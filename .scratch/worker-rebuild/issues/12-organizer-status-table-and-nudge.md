@@ -4,12 +4,12 @@
 
 **Blocked by:** 11
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#12
 
-- [ ] API: one call returns per-participant `wishlistUpdatedAt` and `openedAt` for an event (organizer token)
-- [ ] Table columns: name, wishlist (✓ + relative time, or —), opened (✓ + relative time, or —)
-- [ ] Filter: all / not filled
-- [ ] Nudge: Copy message and Share (where supported) with a translated reminder + the participant's link
-- [ ] Table refreshes on open and on a manual refresh button
+- [x] API: one call returns per-participant `wishlistUpdatedAt` and `openedAt` for an event (organizer token)
+- [x] Table columns: name, wishlist (✓ + relative time, or —), opened (✓ + relative time, or —)
+- [x] Filter: all / not filled
+- [x] Nudge: Copy message and Share (where supported) with a translated reminder + the participant's link
+- [x] Table refreshes on open and on a manual refresh button
