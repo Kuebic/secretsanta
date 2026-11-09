@@ -17,8 +17,8 @@ import { ShareActions } from '../components/ShareActions';
 import { MenuItem } from '../components/SideMenu';
 import { ApiError, deleteEvent, fetchEvent, fetchStatus, ParticipantStatus, saveAssignments, saveEvent } from '../api/events';
 import { StatusTable } from '../components/StatusTable';
-import { DrawErrorKey, DrawSection } from '../components/DrawSection';
-import { countOpened, CurrentDraw, hasDraw, loadDraw, NO_DRAW, sealDraw } from '../utils/draw';
+import { DrawErrorKey, DrawMode, DrawSection } from '../components/DrawSection';
+import { changedGivers, CurrentDraw, hasDraw, hasOpenedCurrentAssignment, keepOrder, loadDraw, NO_DRAW, sealDraw } from '../utils/draw';
 import { generatePairs } from '../utils/generatePairs';
 import { Participants } from '../types';
 import { EventContent, EventDetails, openEvent, sealEvent, withParticipantTokens } from '../utils/eventData';
@@ -172,24 +172,27 @@ export function OrganizerEvent() {
 
   // Assignments are sealed per giver and written in one request; a giver whose
   // receiver is unchanged gets the same ciphertext back, so the Worker keeps
-  // their opened state and they see no "this changed" banner.
-  const handleDraw = async () => {
+  // their opened state and they see no "this changed" banner. A re-draw keeps
+  // every assignment that still fits (ticket 15); a shuffle starts over.
+  const handleDraw = async (mode: DrawMode) => {
     if (!credentials || !content || isDrawing) return;
     setDrawErrorKey(null);
     if (Object.keys(content.participants).length < 2) {
       setDrawErrorKey('errors.needMoreParticipants');
       return;
     }
-    const generated = generatePairs(content.participants);
+    const keep = mode === 'keep' ? keepOrder(draw, status) : [];
+    const generated = generatePairs(content.participants, { keep });
     if (!generated) {
       setDrawErrorKey('errors.invalidPairs');
       return;
     }
-    const openedCount = countOpened(Object.keys(content.participants), status);
-    if (hasDraw(draw) && openedCount > 0 && !window.confirm(t('draw.redrawConfirm', { count: openedCount }))) {
+    const receivers = Object.fromEntries(generated.pairings.map(({ giver, receiver }) => [giver.id, receiver.id]));
+    const openedAndChanged = changedGivers(draw.receivers, receivers)
+      .filter(giverId => hasOpenedCurrentAssignment(status[giverId])).length;
+    if (hasDraw(draw) && openedAndChanged > 0 && !window.confirm(t('draw.redrawConfirm', { count: openedAndChanged }))) {
       return;
     }
-    const receivers = Object.fromEntries(generated.pairings.map(({ giver, receiver }) => [giver.id, receiver.id]));
     setIsDrawing(true);
     try {
       const next = await sealDraw(credentials.eventKey, content.participantTokens, receivers, draw);

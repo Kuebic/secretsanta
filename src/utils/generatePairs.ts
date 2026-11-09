@@ -35,7 +35,7 @@ function randomIndex(max: number): number {
   return buffer[0] % max;
 }
 
-function shuffle<T>(items: T[]): T[] {
+export function shuffle<T>(items: T[]): T[] {
   for (let i = items.length - 1; i > 0; i--) {
     const j = randomIndex(i + 1);
     [items[i], items[j]] = [items[j], items[i]];
@@ -43,7 +43,21 @@ function shuffle<T>(items: T[]): T[] {
   return items;
 }
 
-export function generatePairs(participants: Record<string, Participant>): GeneratedPairs | null {
+/** An assignment from a previous draw the organizer would like to keep. */
+export interface KeptAssignment {
+  giverId: string;
+  receiverId: string;
+}
+
+export interface GenerateOptions {
+  /**
+   * Assignments to keep when they still fit, most protected first. When no
+   * draw exists with all of them kept, the least protected ones give way.
+   */
+  keep?: KeptAssignment[];
+}
+
+export function generatePairs(participants: Record<string, Participant>, options: GenerateOptions = {}): GeneratedPairs | null {
   const participantIds = Object.keys(participants);
   const n = participantIds.length;
 
@@ -99,15 +113,69 @@ export function generatePairs(participants: Record<string, Participant>): Genera
     return false;
   };
 
-  for (let giver = 0; giver < n; giver++) {
-    if (!augment(giver, new Array<boolean>(n).fill(false))) {
-      return null; // The rules allow no draw
+  // Receivers the stuck giver can reach along alternating paths through
+  // unfixed givers end at receivers held by kept givers. Of those holders,
+  // the one listed last in `kept` is the least protected.
+  const leastProtectedReachableHolder = (start: number): number => {
+    const seenReceivers = new Array<boolean>(n).fill(false);
+    const queue = [start];
+    const holders = new Set<number>();
+    while (queue.length > 0) {
+      const giver = queue.shift()!;
+      for (const receiver of allowed[giver]) {
+        if (seenReceivers[receiver]) continue;
+        seenReceivers[receiver] = true;
+        const holder = giverOf[receiver];
+        if (holder === -1) continue;
+        if (fixed[holder]) holders.add(holder);
+        else queue.push(holder);
+      }
+    }
+    for (let i = kept.length - 1; i >= 0; i--) {
+      if (holders.has(kept[i])) return kept[i];
+    }
+    return -1;
+  };
+
+  // Kept assignments that still fit are fixed up front, most protected first.
+  // Each giver and receiver appears at most once.
+  const kept: number[] = [];
+  for (const { giverId, receiverId } of options.keep ?? []) {
+    const giver = indexOf.get(giverId);
+    const receiver = indexOf.get(receiverId);
+    if (giver === undefined || receiver === undefined) continue;
+    if (fixed[giver] || giverOf[receiver] !== -1 || !allowed[giver].includes(receiver)) continue;
+    receiverOf[giver] = receiver;
+    giverOf[receiver] = giver;
+    fixed[giver] = true;
+    kept.push(giver);
+  }
+
+  // Match every other giver. When a giver cannot be placed, a kept
+  // assignment gives way: the least protected one among those holding a
+  // receiver the stuck giver could reach. Releasing only reachable holders
+  // keeps each release useful, so few assignments change.
+  const pending = participantIds.map((_, giver) => giver).filter(giver => !fixed[giver]);
+  while (pending.length > 0) {
+    const giver = pending.pop()!;
+    if (receiverOf[giver] !== -1) continue;
+    while (!augment(giver, new Array<boolean>(n).fill(false))) {
+      const release = leastProtectedReachableHolder(giver);
+      if (release === -1) {
+        return null; // The rules allow no draw
+      }
+      giverOf[receiverOf[release]] = -1;
+      receiverOf[release] = -1;
+      fixed[release] = false;
+      kept.splice(kept.indexOf(release), 1);
+      pending.push(release);
     }
   }
 
-  // Assign one giver at a time, most constrained first, each picking a
-  // random receiver among those that keep the draw completable.
-  for (let step = 0; step < n; step++) {
+  // Assign one unfixed giver at a time, most constrained first, each picking
+  // a random receiver among those that keep the draw completable.
+  const steps = n - kept.length;
+  for (let step = 0; step < steps; step++) {
     let giver = -1;
     let candidates: number[] = [];
     for (let g = 0; g < n; g++) {

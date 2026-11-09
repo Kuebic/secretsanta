@@ -55,12 +55,15 @@ Vocabulary: `GLOSSARY.md`. Decisions: `docs/adr/0001` (one Worker), `0002` (zero
 ### Draw generator
 
 - Backtracking search over candidate receivers, most-constrained giver first. `crypto.getRandomValues` for every random choice. Infeasible rules return `null` as today.
+- Minimal re-draw (ticket 15): the generator accepts an ordered list of assignments to keep, most protected first. It drops any that no longer fit the roster or rules, fixes the rest, and matches the remaining givers. If no draw exists with everything kept, it releases kept assignments from the least protected end, one at a time, until one does. Greedy, not provably minimal; the acceptance cases pin the behaviour that matters. The organizer passes opened givers first, then the others, each tier shuffled.
+- Re-draw keeps by default. "Shuffle everyone" is the secondary action and ignores the previous draw.
 
 ## Testing Decisions
 
 Seams, agreed in advance. Tests live at these and nowhere else.
 
-- **Draw generator** (`generatePairs`): property tests with fast-check. Every giver gives once, every receiver receives once, nobody draws themselves, every rule honoured, every feasible constraint set solves.
+- **Draw generator** (`generatePairs`): property tests with fast-check. Every giver gives once, every receiver receives once, nobody draws themselves, every rule honoured, every feasible constraint set solves. With a keep list: valid kept assignments survive, a fully valid previous draw is returned unchanged, one removal or one addition on a rule-free roster changes exactly one existing giver, protection order is respected when something must be released.
+- **Re-draw planning** (pure helpers in the draw utilities): the keep order puts opened givers first; the changed-giver set is computed from previous and next receivers.
 - **Participant text format** (`parseParticipantsText` / `formatParticipantText`): round-trip property tests, extended for Organizer's note wording.
 - **Crypto module**: encrypt/decrypt round trip, wrong key fails, assignment key derived from a different token fails to decrypt. Runs in Node with `globalThis.crypto`.
 - **Link codec**: build and parse organizer and participant links, fragment carries key and token, legacy links still parse.

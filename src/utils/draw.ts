@@ -1,6 +1,7 @@
 import { AssignmentStatus, fetchAssignment } from '../api/events';
 import { Participants } from '../types';
 import { openAssignment, sealAssignment } from './eventCrypto';
+import { KeptAssignment, shuffle } from './generatePairs';
 import { OrganizerCredentials } from './linkCodec';
 
 // The current draw as the organizer sees it: decrypted receivers, plus the
@@ -80,4 +81,21 @@ export function isDrawStale(participants: Participants, draw: CurrentDraw): bool
     return participants[giverId].rules.some(rule =>
       rule.type === 'must' ? rule.targetParticipantId !== receiverId : rule.targetParticipantId === receiverId);
   });
+}
+
+// What a re-draw tries to keep, most protected first: givers who have opened
+// their current assignment, then everyone else. Each tier is shuffled so the
+// giver who has to change, when one does, is picked at random.
+export function keepOrder(draw: CurrentDraw, status: Record<string, AssignmentStatus>): KeptAssignment[] {
+  const opened: KeptAssignment[] = [];
+  const unopened: KeptAssignment[] = [];
+  for (const [giverId, receiverId] of Object.entries(draw.receivers)) {
+    (hasOpenedCurrentAssignment(status[giverId]) ? opened : unopened).push({ giverId, receiverId });
+  }
+  return [...shuffle(opened), ...shuffle(unopened)];
+}
+
+// Givers still in the draw whose receiver is not the one they had.
+export function changedGivers(previous: Record<string, string>, next: Record<string, string>): string[] {
+  return Object.keys(previous).filter(giverId => giverId in next && previous[giverId] !== next[giverId]);
 }

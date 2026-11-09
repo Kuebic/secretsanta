@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowsClockwise, DownloadSimple, Eye, EyeSlash } from '@phosphor-icons/react';
+import { ArrowsClockwise, DownloadSimple, Eye, EyeSlash, Shuffle } from '@phosphor-icons/react';
 import { AssignmentStatus } from '../api/events';
 import { Participants } from '../types';
 import { countOpened, CurrentDraw, hasDraw, isDrawStale } from '../utils/draw';
 import { generateCSV } from '../utils/csv';
 
 export type DrawErrorKey = 'errors.needMoreParticipants' | 'errors.invalidPairs' | 'draw.saveError' | 'draw.loadError';
+
+// 'keep' holds on to every assignment that still fits; 'shuffle' starts over.
+export type DrawMode = 'keep' | 'shuffle';
 
 interface DrawSectionProps {
   participants: Participants;
@@ -15,7 +18,7 @@ interface DrawSectionProps {
   isDrawing: boolean;
   canDraw: boolean;
   errorKey: DrawErrorKey | null;
-  onDraw: () => void;
+  onDraw: (mode: DrawMode) => void;
 }
 
 // The organizer runs the draw here. Assignments stay hidden until asked for, so
@@ -62,13 +65,28 @@ export function DrawSection({ participants, draw, status, isDrawing, canDraw, er
 
       <button
         type="button"
-        onClick={onDraw}
+        onClick={() => onDraw('keep')}
         disabled={!canDraw || isDrawing}
         className="w-full p-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
       >
         <ArrowsClockwise size={20} weight="bold" />
         {isDrawing ? t('draw.drawing') : t(drawn ? 'draw.redraw' : 'draw.draw')}
       </button>
+
+      {drawn && (
+        <div className="space-y-1">
+          <p className="text-xs text-gray-500">{t('draw.redrawKeeps')}</p>
+          <button
+            type="button"
+            onClick={() => onDraw('shuffle')}
+            disabled={!canDraw || isDrawing}
+            className="w-full p-2 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-2 text-gray-700"
+          >
+            <Shuffle size={20} weight="bold" />
+            {t('draw.shuffle')}
+          </button>
+        </div>
+      )}
 
       {drawn && (
         <div className="space-y-3">
