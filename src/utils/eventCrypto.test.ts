@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decryptBlob, deriveKey, encryptBlob, mintEvent, mintParticipantId, mintToken, openAssignment, sealAssignment } from './eventCrypto';
 import { DETAILS_LIMITS, openParticipantView, sealEvent } from './eventData';
+import { openWishlist, sealWishlist, wishlistCharactersLeft } from './wishlist';
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
@@ -109,5 +110,45 @@ describe('details', () => {
     const sealed = await sealEvent(credentials, { details, participants: {}, participantTokens: {} });
     expect(sealed.details.length).toBeLessThanOrEqual(MAX_BLOB_BYTES);
     expect(DETAILS_LIMITS.notes).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+describe('wishlists', () => {
+  const MAX_BLOB_BYTES = 16 * 1024;
+  const wishlist = {
+    items: [
+      { text: 'Wool socks, size 42', url: '' },
+      { text: 'Le Petit Prince', url: 'https://example.com/petit-prince' },
+    ],
+    notes: 'Allergic to peanuts. No candles please.',
+  };
+
+  it('seals a wishlist with the event key so any participant link opens it, and nothing readable reaches the server', async () => {
+    const { eventKey } = mintEvent([]);
+    const sealed = await sealWishlist(eventKey, wishlist);
+    expect(sealed).not.toContain('socks');
+    expect(await openWishlist(eventKey, sealed)).toEqual(wishlist);
+  });
+
+  it('a wishlist does not open with another event\'s key', async () => {
+    const sealed = await sealWishlist(mintEvent([]).eventKey, wishlist);
+    await expect(openWishlist(mintEvent([]).eventKey, sealed)).rejects.toThrow();
+  });
+
+  it('a wishlist that uses its whole character budget seals under 16 KB, and one character more is refused', async () => {
+    const { eventKey } = mintEvent([]);
+    const empty = { items: [{ text: '', url: 'https://example.com/' }], notes: '' };
+    const full = { ...empty, notes: 'x'.repeat(wishlistCharactersLeft(empty)) };
+    expect(wishlistCharactersLeft(full)).toBe(0);
+    expect((await sealWishlist(eventKey, full)).length).toBeLessThanOrEqual(MAX_BLOB_BYTES);
+
+    // Characters that take more room once encoded use more of the budget.
+    const over = { ...full, notes: `${full.notes.slice(1)}é` };
+    expect(wishlistCharactersLeft(over)).toBeLessThan(0);
+    await expect(sealWishlist(eventKey, over)).rejects.toThrow();
+  });
+
+  it('an empty wishlist leaves a budget of thousands of characters', () => {
+    expect(wishlistCharactersLeft({ items: [], notes: '' })).toBeGreaterThan(10000);
   });
 });
