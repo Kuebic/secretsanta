@@ -157,14 +157,61 @@ async function requireEvent(env: Env, id: string): Promise<Meta> {
   return meta;
 }
 
-const put = (env: Env, key: string, value: string) => env.EVENTS.put(key, value, { expirationTtl: EVENT_TTL_SECONDS });
+// Every entry of an event expires together, 13 months after the last
+// organizer write. Participant writes keep that expiry rather than extending it.
+const eventExpiration = (meta: Meta) => Math.floor(Date.parse(meta.updatedAt) / 1000) + EVENT_TTL_SECONDS;
 
-// Every organizer write rewrites meta, details and roster so all three get a
-// fresh 13-month TTL together.
+// Entries already within a day of the new expiry are left alone, so an
+// organizer's autosave does not rewrite every wishlist on each keystroke.
+const REFRESH_SLACK_SECONDS = 24 * 60 * 60;
+
+type ListedKey = { name: string; expiration?: number; metadata?: unknown };
+
+// The whole listing is read before anything acts on it: writes or deletes
+// made while paging would shift the pages still to come.
+async function listKeys(env: Env, prefix: string): Promise<ListedKey[]> {
+  const found: ListedKey[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await env.EVENTS.list({ prefix, cursor });
+    found.push(...page.keys);
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return found;
+}
+
+async function rewriteWithExpiration(env: Env, name: string, expiration: number): Promise<void> {
+  const { value, metadata } = await env.EVENTS.getWithMetadata(name);
+  if (value !== null) {
+    await env.EVENTS.put(name, value, { expiration, metadata });
+  }
+}
+
+// After an organizer write: every other entry of the event moves to the new
+// expiry, and entries of participants the roster no longer lists are removed.
+async function refreshEntries(env: Env, id: string, roster: StoredRoster, expiration: number, fresh: Set<string>): Promise<void> {
+  const prefix = keys.prefix(id);
+  const pending: Promise<void>[] = [];
+  for (const key of await listKeys(env, prefix)) {
+    if (fresh.has(key.name)) continue;
+    const [kind, pid] = key.name.slice(prefix.length).split(':');
+    if (kind === 'p' && !(pid in roster.participantTokenHashes)) {
+      pending.push(env.EVENTS.delete(key.name));
+    } else if ((key.expiration ?? 0) < expiration - REFRESH_SLACK_SECONDS) {
+      pending.push(rewriteWithExpiration(env, key.name, expiration));
+    }
+  }
+  await Promise.all(pending);
+}
+
+// An organizer write of meta, details and roster; the rest of the event follows.
 async function writeEvent(env: Env, id: string, meta: Meta, details: string, roster: StoredRoster): Promise<void> {
-  await put(env, keys.details(id), details);
-  await put(env, keys.roster(id), JSON.stringify(roster));
-  await put(env, keys.meta(id), JSON.stringify(meta));
+  const expiration = eventExpiration(meta);
+  const written = { [keys.details(id)]: details, [keys.roster(id)]: JSON.stringify(roster), [keys.meta(id)]: JSON.stringify(meta) };
+  for (const [name, value] of Object.entries(written)) {
+    await env.EVENTS.put(name, value, { expiration });
+  }
+  await refreshEntries(env, id, roster, expiration, new Set(Object.keys(written)));
 }
 
 async function readStored(env: Env, id: string): Promise<{ details: string; roster: StoredRoster }> {
@@ -202,20 +249,15 @@ async function readStatus(env: Env, id: string, roster: StoredRoster): Promise<R
     Object.keys(roster.participantTokenHashes).map(pid => [pid, {}]),
   );
   const prefix = `${keys.prefix(id)}p:`;
-  let cursor: string | undefined;
-  do {
-    const page = await env.EVENTS.list({ prefix, cursor });
-    for (const { name, metadata } of page.keys) {
-      const [pid, kind] = name.slice(prefix.length).split(':');
-      if (kind === 'assignment' && pid in status) {
-        Object.assign(status[pid], assignmentStatus(metadata));
-      }
-      if (kind === 'wishlist' && pid in status) {
-        Object.assign(status[pid], wishlistStatus(metadata));
-      }
+  for (const { name, metadata } of await listKeys(env, prefix)) {
+    const [pid, kind] = name.slice(prefix.length).split(':');
+    if (kind === 'assignment' && pid in status) {
+      Object.assign(status[pid], assignmentStatus(metadata));
     }
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
+    if (kind === 'wishlist' && pid in status) {
+      Object.assign(status[pid], wishlistStatus(metadata));
+    }
+  }
   return status;
 }
 
@@ -233,10 +275,6 @@ function wishlistStatus(metadata: unknown): { wishlistUpdatedAt?: string } {
   const value = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).wishlistUpdatedAt : undefined;
   return typeof value === 'string' ? { wishlistUpdatedAt: value } : {};
 }
-
-// Participant writes keep the event's expiry rather than refreshing it: only
-// organizer writes extend an event's life.
-const eventExpiration = (meta: Meta) => Math.floor(Date.parse(meta.updatedAt) / 1000) + EVENT_TTL_SECONDS;
 
 async function getEvent(env: Env, id: string): Promise<Response> {
   const meta = await requireEvent(env, id);
@@ -269,22 +307,26 @@ async function putAssignments(request: Request, env: Env, id: string): Promise<R
     assignments.push([pid, ciphertext(value)]);
   }
   const drawn = new Set(assignments.map(([pid]) => pid));
-  const now = new Date().toISOString();
+  // A draw is an organizer write: it moves updatedAt and the event's expiry.
+  const updated: Meta = { ...meta, updatedAt: new Date().toISOString() };
+  const expiration = eventExpiration(updated);
   // A giver whose ciphertext is resent unchanged keeps assignedAt and
   // openedAt, so "this changed" only shows when their receiver changed.
   const write = async ([pid, value]: [string, string]) => {
     const existing = await env.EVENTS.getWithMetadata(keys.assignment(id, pid));
     const status = assignmentStatus(existing.metadata);
-    const metadata = existing.value === value && status.assignedAt ? status : { ...status, assignedAt: now };
-    await env.EVENTS.put(keys.assignment(id, pid), value, { expirationTtl: EVENT_TTL_SECONDS, metadata });
+    const metadata = existing.value === value && status.assignedAt ? status : { ...status, assignedAt: updated.updatedAt };
+    await env.EVENTS.put(keys.assignment(id, pid), value, { expiration, metadata });
   };
+  const undrawn = Object.keys(roster.participantTokenHashes).filter(pid => !drawn.has(pid));
   await Promise.all([
+    env.EVENTS.put(keys.meta(id), JSON.stringify(updated), { expiration }),
     ...assignments.map(write),
-    ...Object.keys(roster.participantTokenHashes)
-      .filter(pid => !drawn.has(pid))
-      .map(pid => env.EVENTS.delete(keys.assignment(id, pid))),
+    ...undrawn.map(pid => env.EVENTS.delete(keys.assignment(id, pid))),
   ]);
-  return json({ ok: true });
+  const fresh = new Set([keys.meta(id), ...[...drawn, ...undrawn].map(pid => keys.assignment(id, pid))]);
+  await refreshEntries(env, id, roster, expiration, fresh);
+  return json({ updatedAt: updated.updatedAt });
 }
 
 async function getAssignment(env: Env, id: string, pid: string): Promise<Response> {
@@ -345,13 +387,7 @@ async function getWishlist(env: Env, id: string, pid: string): Promise<Response>
 async function deleteEvent(request: Request, env: Env, id: string): Promise<Response> {
   const meta = await requireEvent(env, id);
   await authorizeOrganizer(request, meta);
-  const names: string[] = [];
-  let cursor: string | undefined;
-  do {
-    const page = await env.EVENTS.list({ prefix: keys.prefix(id), cursor });
-    names.push(...page.keys.map(key => key.name));
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor);
+  const names = (await listKeys(env, keys.prefix(id))).map(key => key.name);
   // Meta last, so a half-finished delete can be retried with the same token.
   const metaKey = keys.meta(id);
   await Promise.all(names.filter(name => name !== metaKey).map(name => env.EVENTS.delete(name)));

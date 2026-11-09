@@ -13,6 +13,8 @@ interface StoredEntry {
   writes: number;
 }
 
+const A_MONTH = 30 * 24 * 60 * 60;
+
 // In-memory stand-in for the EVENTS KV namespace.
 function makeKv() {
   const store = new Map<string, StoredEntry>();
@@ -37,7 +39,11 @@ function makeKv() {
       const start = cursor ? Number(cursor) : 0;
       const page = names.slice(start, start + 2);
       const done = start + 2 >= names.length;
-      return { keys: page.map(name => ({ name, metadata: store.get(name)!.metadata })), list_complete: done, cursor: done ? undefined : String(start + 2) };
+      return {
+        keys: page.map(name => ({ name, expiration: store.get(name)!.expiration, metadata: store.get(name)!.metadata })),
+        list_complete: done,
+        cursor: done ? undefined : String(start + 2),
+      };
     },
   };
 }
@@ -206,24 +212,52 @@ describe('events API: limits', () => {
 });
 
 describe('events API: TTL', () => {
-  it('stores every event entry with a 13-month TTL', async () => {
+  const metaExpiration = () =>
+    Math.floor(Date.parse(JSON.parse(kv.store.get(`event:${EVENT_ID}:meta`)!.value).updatedAt) / 1000) + THIRTEEN_MONTHS;
+  const draw = () => call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } } });
+  const fillWishlist = () => call('PUT', `/api/events/${EVENT_ID}/participants/${P2}/wishlist`, { token: 't2', body: { wishlist: blob(64, 'W') } });
+  // Stands in for time passing since the entries were written.
+  const ageEveryEntry = (seconds: number) => {
+    for (const entry of kv.store.values()) entry.expiration! -= seconds;
+  };
+  const writesByKey = () => Object.fromEntries([...kv.store].map(([name, entry]) => [name, entry.writes]));
+
+  it('stores every entry of the event, including wishlists and assignments, to expire 13 months after the last organizer write', async () => {
     await createEvent();
-    expect([...kv.store.keys()].sort()).toEqual([
-      `event:${EVENT_ID}:details`,
-      `event:${EVENT_ID}:meta`,
-      `event:${EVENT_ID}:roster`,
-    ]);
+    await draw();
+    await fillWishlist();
+    expect(kv.store.size).toBe(6);
     for (const entry of kv.store.values()) {
-      expect(entry.expirationTtl).toBe(THIRTEEN_MONTHS);
+      expect(entry.expiration).toBe(metaExpiration());
     }
   });
 
-  it('refreshes the TTL of every event entry on each organizer write', async () => {
+  it('moves every entry to the new expiry on an organizer save, and leaves entries already current alone', async () => {
     await createEvent();
+    await draw();
+    await fillWishlist();
+    ageEveryEntry(2 * A_MONTH);
+
     await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details: blob(70, 'N') }) });
     for (const entry of kv.store.values()) {
-      expect(entry.writes).toBe(2);
-      expect(entry.expirationTtl).toBe(THIRTEEN_MONTHS);
+      expect(entry.expiration).toBe(metaExpiration());
+    }
+    const before = writesByKey();
+
+    // Saving again right away rewrites only what the save carries.
+    await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details: blob(70, 'M') }) });
+    for (const [name, writes] of Object.entries(writesByKey())) {
+      expect(writes - before[name]).toBe(name.includes(':p:') ? 0 : 1);
+    }
+  });
+
+  it('a draw is an organizer write: it refreshes the whole event too', async () => {
+    await createEvent();
+    await fillWishlist();
+    ageEveryEntry(2 * A_MONTH);
+    await draw();
+    for (const entry of kv.store.values()) {
+      expect(entry.expiration).toBe(metaExpiration());
     }
   });
 
@@ -244,6 +278,21 @@ describe('events API: TTL', () => {
     const after = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
     expect(after.createdAt).toBe(before.createdAt);
     expect(after.updatedAt > before.updatedAt).toBe(true);
+  });
+
+  it('removes the wishlist and assignment of a participant the roster drops', async () => {
+    await createEvent();
+    await draw();
+    await fillWishlist();
+    const response = await call('PUT', `/api/events/${EVENT_ID}`, {
+      token: ORGANIZER_TOKEN,
+      body: await eventBody({ participantTokenHashes: { [P1]: await hashToken('t1') } }),
+    });
+    expect(response.status).toBe(200);
+    expect([...kv.store.keys()].filter(name => name.includes(P2))).toEqual([]);
+    expect((await call('GET', `/api/events/${EVENT_ID}/participants/${P2}/assignment`)).status).toBe(404);
+    expect((await call('GET', `/api/events/${EVENT_ID}/participants/${P2}/wishlist`)).status).toBe(404);
+    expect(await (await call('GET', `/api/events/${EVENT_ID}/participants/${P1}/assignment`)).json()).toMatchObject({ assignment: blob(64, 'A') });
   });
 });
 
@@ -285,7 +334,8 @@ describe('events API: assignments', () => {
     expect(response.status).toBe(200);
     expect(await (await call('GET', assignmentPath(P1))).json()).toMatchObject({ assignment: blob(64, 'A') });
     expect(await (await call('GET', assignmentPath(P2))).json()).toMatchObject({ assignment: blob(64, 'B') });
-    expect(kv.store.get(`event:${EVENT_ID}:p:${P1}:assignment`)!.expirationTtl).toBe(THIRTEEN_MONTHS);
+    const updatedAt = JSON.parse(kv.store.get(`event:${EVENT_ID}:meta`)!.value).updatedAt;
+    expect(kv.store.get(`event:${EVENT_ID}:p:${P1}:assignment`)!.expiration).toBe(Math.floor(Date.parse(updatedAt) / 1000) + THIRTEEN_MONTHS);
   });
 
   it('answers 404 for a giver with no assignment yet', async () => {

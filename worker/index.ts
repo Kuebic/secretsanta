@@ -12,7 +12,7 @@ export interface KVNamespaceLike {
   put(key: string, value: string, options?: { expirationTtl?: number; expiration?: number; metadata?: unknown }): Promise<void>;
   delete(key: string): Promise<void>;
   list(options?: { prefix?: string; cursor?: string }): Promise<{
-    keys: { name: string; metadata?: unknown }[];
+    keys: { name: string; expiration?: number; metadata?: unknown }[];
     list_complete: boolean;
     cursor?: string;
   }>;
