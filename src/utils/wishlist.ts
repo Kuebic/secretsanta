@@ -1,4 +1,5 @@
 import { decryptBlob, encryptBlob } from './eventCrypto';
+import { MAX_BLOB_BYTES } from './limits';
 
 // One entry in a wishlist: a description and an optional link (empty when none).
 export interface WishlistItem {
@@ -15,11 +16,9 @@ export interface Wishlist {
 
 export const EMPTY_WISHLIST: Wishlist = { items: [], notes: '' };
 
-// The Worker refuses blobs over 16 KB. A sealed blob is base64url of
-// iv (12) || ciphertext || tag (16), so the JSON plaintext gets
-// 16384 * 3/4 - 28 bytes.
-const MAX_BLOB_CHARS = 16 * 1024;
-const MAX_PLAINTEXT_BYTES = (MAX_BLOB_CHARS * 3) / 4 - 12 - 16;
+// A sealed blob is base64url of iv (12) || ciphertext || tag (16), so the
+// JSON plaintext gets 3/4 of the Worker's blob limit minus 28 bytes.
+const MAX_PLAINTEXT_BYTES = (MAX_BLOB_BYTES * 3) / 4 - 12 - 16;
 
 const encode = (wishlist: Wishlist) => new TextEncoder().encode(JSON.stringify(wishlist));
 

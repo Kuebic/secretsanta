@@ -1,4 +1,5 @@
 import { handleEvents } from './events';
+import { json } from './http';
 
 // Minimal structural types for the bindings this Worker uses, so the
 // handler typechecks without pulling in @cloudflare/workers-types.
@@ -21,13 +22,6 @@ export interface KVNamespaceLike {
 export interface Env {
   ASSETS: AssetsBinding;
   EVENTS: KVNamespaceLike;
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
 }
 
 async function handleApi(request: Request, url: URL, env: Env): Promise<Response> {

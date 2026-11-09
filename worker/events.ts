@@ -1,11 +1,11 @@
 import { hashToken } from '../src/utils/base64url';
+import { MAX_BLOB_BYTES, MAX_PARTICIPANTS } from '../src/utils/limits';
+import { HttpError, json } from './http';
 import type { Env } from './index';
 
 // Server side of ADR 0002: every value here is ciphertext the browser made,
 // except meta (token hash and timestamps) and participant token hashes.
 
-export const MAX_BLOB_BYTES = 16 * 1024;
-export const MAX_PARTICIPANTS = 100;
 // 13 months, rounded up, refreshed on every organizer write.
 export const EVENT_TTL_SECONDS = 396 * 24 * 60 * 60;
 // Largest body any route accepts: three blobs plus participant token hashes.
@@ -22,37 +22,27 @@ interface Meta {
   updatedAt: string;
 }
 
+// The roster entry: the roster ciphertext everyone with the event key opens,
+// the organizer-only ciphertext (sealed with a key derived from the organizer
+// token), and the hashes that authorize participant writes.
 interface StoredRoster {
   roster: string;
-  organizer: string;
+  organizerOnly: string;
   participantTokenHashes: Record<string, string>;
 }
 
 // Plaintext KV metadata of an assignment: timing only (ADR 0002).
 // assignedAt moves when a draw changes the ciphertext; openedAt when the
 // giver opens it.
-interface AssignmentStatus {
+export interface AssignmentStatus {
   assignedAt?: string;
   openedAt?: string;
 }
 
 // What the event status lists per participant: assignment timing plus when
 // their wishlist last changed. Plaintext timing only.
-interface ParticipantStatus extends AssignmentStatus {
+export interface ParticipantStatus extends AssignmentStatus {
   wishlistUpdatedAt?: string;
-}
-
-class HttpError extends Error {
-  constructor(readonly status: number, readonly code: string) {
-    super(code);
-  }
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  });
 }
 
 const keys = {
@@ -126,7 +116,7 @@ function rosterFromBody(body: Record<string, unknown>): StoredRoster {
   }
   return {
     roster: ciphertext(body.roster),
-    organizer: ciphertext(body.organizer),
+    organizerOnly: ciphertext(body.organizerOnly),
     participantTokenHashes: Object.fromEntries(entries) as Record<string, string>,
   };
 }
@@ -282,7 +272,7 @@ async function getEvent(env: Env, id: string): Promise<Response> {
   return json({
     details,
     roster: roster.roster,
-    organizer: roster.organizer,
+    organizerOnly: roster.organizerOnly,
     createdAt: meta.createdAt,
     updatedAt: meta.updatedAt,
     status: await readStatus(env, id, roster),

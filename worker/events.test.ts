@@ -71,7 +71,7 @@ async function eventBody(overrides: Record<string, unknown> = {}) {
   return {
     details: blob(64, 'D'),
     roster: blob(64, 'R'),
-    organizer: blob(64, 'O'),
+    organizerOnly: blob(64, 'O'),
     participantTokenHashes: { [P1]: await hashToken('t1'), [P2]: await hashToken('t2') },
     ...overrides,
   };
@@ -102,7 +102,7 @@ describe('events API: create and read', () => {
     const response = await call('GET', `/api/events/${EVENT_ID}`);
     expect(response.status).toBe(200);
     const event = await response.json();
-    expect(event).toMatchObject({ details: blob(64, 'D'), roster: blob(64, 'R'), organizer: blob(64, 'O') });
+    expect(event).toMatchObject({ details: blob(64, 'D'), roster: blob(64, 'R'), organizerOnly: blob(64, 'O') });
     expect(typeof event.createdAt).toBe('string');
     expect(typeof event.updatedAt).toBe('string');
   });

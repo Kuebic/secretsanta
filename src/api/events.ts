@@ -1,3 +1,4 @@
+import type { AssignmentStatus, ParticipantStatus } from '../../worker/events';
 import { SealedEvent } from '../utils/eventData';
 
 // Thin client for the Worker's events API. Bodies carry ciphertext and token
@@ -9,22 +10,14 @@ export class ApiError extends Error {
   }
 }
 
-// Plaintext timing the Worker keeps per participant (ADR 0002).
-export interface AssignmentStatus {
-  assignedAt?: string;
-  openedAt?: string;
-}
-
-// Plaintext timing per participant in the event status: assignment timing
-// plus when their wishlist last changed.
-export interface ParticipantStatus extends AssignmentStatus {
-  wishlistUpdatedAt?: string;
-}
+// Plaintext timing the Worker keeps per participant (ADR 0002), as the
+// Worker defines it.
+export type { AssignmentStatus, ParticipantStatus } from '../../worker/events';
 
 export interface StoredEvent {
   details: string;
   roster: string;
-  organizer: string;
+  organizerOnly: string;
   createdAt: string;
   updatedAt: string;
   status: Record<string, ParticipantStatus>;
