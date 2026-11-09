@@ -1,6 +1,6 @@
-import { Translations } from './config';
+import type { Locale, Translations } from './config';
 
-export const fr: Translations = {
+export const fr: Locale<Translations> = {
   language: {
     flag: "🇫🇷",
     name: "Français",
@@ -45,6 +45,7 @@ export const fr: Translations = {
     removeParticipant: "Supprimer le participant",
     rulesCount_one: "{{count}} règle définie",
     rulesCount_other: "{{count}} règles définies",
+    rulesCount_many: "{{count}} de règles définies",
     switchToFormView: "Passer à la vue formulaire",
     switchToTextView: "Passer à la vue texte",
     textSyntax: "Un participant par ligne : Nom (Note de l'organisateur) =Doit !Ne doit pas",
@@ -91,6 +92,7 @@ export const fr: Translations = {
     notesPlaceholder: "Par exemple : tenue, emballage, quoi apporter...",
     charactersLeft_one: "{{count}} caractère restant",
     charactersLeft_other: "{{count}} caractères restants",
+    charactersLeft_many: "{{count}} de caractères restants",
     addToCalendar: "Ajouter au calendrier",
   },
   events: {
@@ -126,6 +128,7 @@ export const fr: Translations = {
     noDraw: "Cet événement n'a pas encore de tirage : rien à éviter.",
     added_one: "{{count}} règle d'exclusion ajoutée.",
     added_other: "{{count}} règles d'exclusion ajoutées.",
+    added_many: "{{count}} de règles d'exclusion ajoutées.",
     nothingAdded: "Aucune nouvelle règle : les exclusions correspondantes existaient déjà.",
     unmatchedTitle: "Ces noms du tirage précédent ne correspondent à personne ici, leurs tirages ont été ignorés. Corrigez un nom puis importez à nouveau s'il s'agit de la même personne :",
   },
@@ -142,6 +145,7 @@ export const fr: Translations = {
     opened: "{{opened}} participants sur {{total}} ont ouvert leur tirage.",
     redrawConfirm_one: "{{count}} participant a déjà ouvert son tirage. Un nouveau tirage peut changer la personne à qui il offre. Refaire le tirage quand même ?",
     redrawConfirm_other: "{{count}} participants ont déjà ouvert leur tirage. Un nouveau tirage peut changer la personne à qui ils offrent. Refaire le tirage quand même ?",
+    redrawConfirm_many: "{{count}} de participants ont déjà ouvert leur tirage. Un nouveau tirage peut changer la personne à qui ils offrent. Refaire le tirage quand même ?",
     stale: "Les participants ou les règles ont changé depuis le dernier tirage. Refaites le tirage pour que chacun ait une personne qui respecte les règles.",
     revealPairings: "Afficher les associations",
     hidePairings: "Masquer les associations",
@@ -232,6 +236,7 @@ export const fr: Translations = {
     notesPlaceholder: "Tailles, ce que vous n'aimez pas, allergies...",
     charactersLeft_one: "{{count}} caractère restant",
     charactersLeft_other: "{{count}} caractères restants",
+    charactersLeft_many: "{{count}} de caractères restants",
     save: "Enregistrer la liste",
     saving: "Enregistrement...",
     saved: "Enregistrée",
