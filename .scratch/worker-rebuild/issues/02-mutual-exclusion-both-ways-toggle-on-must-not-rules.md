@@ -4,13 +4,13 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#2
 
-- [ ] Rules modal: Must Not row has a both-ways toggle, on by default
-- [ ] Saving with toggle on writes a Must Not on both participants; toggle off writes one direction only
-- [ ] Removing one side of a mutual exclusion offers to remove the other side too
-- [ ] Participant rows indicate rule counts including rules added from the other side
-- [ ] Text view `!Name` syntax unchanged; both lines show their rule
-- [ ] Glossary term "Mutual exclusion" used in UI copy and i18n keys
+- [x] Rules modal: Must Not row has a both-ways toggle, on by default
+- [x] Saving with toggle on writes a Must Not on both participants; toggle off writes one direction only
+- [x] Removing one side of a mutual exclusion offers to remove the other side too
+- [x] Participant rows indicate rule counts including rules added from the other side
+- [x] Text view `!Name` syntax unchanged; both lines show their rule
+- [x] Glossary term "Mutual exclusion" used in UI copy and i18n keys
