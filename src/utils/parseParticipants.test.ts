@@ -22,7 +22,7 @@ describe('parseParticipantsText', () => {
     expect(participants.every(p => p.rules.length === 0)).toBe(true);
   });
 
-  it('should parse participants with hints', () => {
+  it('should parse participants with an Organizer\'s note in parentheses', () => {
     const input = `
       Alice (likes cats)
       Bob (allergic to chocolate)
@@ -214,6 +214,38 @@ describe('mutual exclusion in the text view', () => {
           expect(byName[ns[y]].rules).toContainEqual({ type: 'mustNot', targetParticipantId: byName[ns[x]].id });
         }
         expect(formatParticipantText(parsed.participants)).toBe(text);
+      },
+    ));
+  });
+});
+
+describe('Organizer\'s note in the text view', () => {
+  it('round-trips every participant\'s Organizer\'s note, beside their rules, through format and parse', () => {
+    const names = fc.uniqueArray(fc.stringMatching(/^[A-Za-z][A-Za-z0-9]{0,7}$/), { minLength: 2, maxLength: 6 });
+    // Anything a note may hold on one line, including rule characters and
+    // balanced parentheses, trimmed like the parser trims it.
+    const note = fc.stringMatching(/^[A-Za-z0-9éàç ,.'!=:€-]{0,30}$/)
+      .chain(text => fc.constantFrom(text, `${text} (size M)`))
+      .map(text => text.trim());
+
+    fc.assert(fc.property(
+      names.chain(ns => fc.tuple(fc.constant(ns), fc.array(note, { minLength: ns.length, maxLength: ns.length }))),
+      ([ns, notes]) => {
+        const participants: Record<string, Participant> = {};
+        ns.forEach((name, i) => {
+          const rules = i > 0 ? [{ type: 'mustNot' as const, targetParticipantId: `id${i - 1}` }] : [];
+          participants[`id${i}`] = notes[i] ? { id: `id${i}`, name, hint: notes[i], rules } : { id: `id${i}`, name, rules };
+        });
+
+        const parsed = parseParticipantsText(formatParticipantText(participants));
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) return;
+
+        const byName = Object.fromEntries(Object.values(parsed.participants).map(p => [p.name, p]));
+        ns.forEach((name, i) => {
+          expect(byName[name].hint || undefined).toBe(notes[i] || undefined);
+          expect(byName[name].rules).toHaveLength(i > 0 ? 1 : 0);
+        });
       },
     ));
   });

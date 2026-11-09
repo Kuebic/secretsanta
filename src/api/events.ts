@@ -15,13 +15,19 @@ export interface AssignmentStatus {
   openedAt?: string;
 }
 
+// Plaintext timing per participant in the event status: assignment timing
+// plus when their wishlist last changed.
+export interface ParticipantStatus extends AssignmentStatus {
+  wishlistUpdatedAt?: string;
+}
+
 export interface StoredEvent {
   details: string;
   roster: string;
   organizer: string;
   createdAt: string;
   updatedAt: string;
-  status: Record<string, AssignmentStatus>;
+  status: Record<string, ParticipantStatus>;
 }
 
 export interface StoredAssignment extends AssignmentStatus {
@@ -80,4 +86,30 @@ export async function markOpened(eventId: string, participantId: string, partici
   const response = await request('POST', eventId, participantToken, undefined, `/participants/${encodeURIComponent(participantId)}/opened`);
   const { openedAt } = await response.json() as { openedAt: string };
   return openedAt;
+}
+
+export interface StoredWishlist {
+  wishlist: string;
+  wishlistUpdatedAt?: string;
+}
+
+const wishlistResource = (participantId: string) => `/participants/${encodeURIComponent(participantId)}/wishlist`;
+
+// A participant's sealed wishlist, or null when they have not written one yet.
+export async function fetchWishlist(eventId: string, participantId: string): Promise<StoredWishlist | null> {
+  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}${wishlistResource(participantId)}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status);
+  }
+  return await response.json() as StoredWishlist;
+}
+
+// Saves the participant's own sealed wishlist with their participant token.
+export async function saveWishlist(eventId: string, participantId: string, participantToken: string, wishlist: string): Promise<string> {
+  const response = await request('PUT', eventId, participantToken, { wishlist }, wishlistResource(participantId));
+  const { wishlistUpdatedAt } = await response.json() as { wishlistUpdatedAt: string };
+  return wishlistUpdatedAt;
 }

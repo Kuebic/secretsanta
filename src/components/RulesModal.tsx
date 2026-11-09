@@ -129,13 +129,13 @@ export function RulesModal({
         
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('rules.hintLabel')}
+            {t('rules.organizersNoteLabel')}
           </label>
           <input
             type="text"
             value={localHint}
             onChange={(e) => setLocalHint(e.target.value)}
-            placeholder={t('rules.hintPlaceholder')}
+            placeholder={t('rules.organizersNotePlaceholder')}
             className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>

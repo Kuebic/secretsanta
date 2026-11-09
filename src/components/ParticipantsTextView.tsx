@@ -31,7 +31,9 @@ export function ParticipantsTextView({ participants, onChangeParticipants, onGen
 
   return (
     <div className="relative space-y-2">
+      <p className="text-xs text-gray-500" id="participants-text-syntax">{t('participants.textSyntax')}</p>
       <textarea
+        aria-describedby="participants-text-syntax"
         className={`block w-full h-48 p-2 font-mono text-sm border rounded text-nowrap ${
           error ? 'border-red-500' : ''
         }`}

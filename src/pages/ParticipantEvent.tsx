@@ -7,6 +7,8 @@ import { PostCard } from '../components/PostCard';
 import { ApiError, fetchAssignment, fetchEvent, markOpened, StoredAssignment } from '../api/events';
 import { EnvelopeReveal } from '../components/EnvelopeReveal';
 import { EventDetailsBlock } from '../components/EventDetailsBlock';
+import { ReceiverWishlist } from '../components/ReceiverWishlist';
+import { WishlistEditor } from '../components/WishlistEditor';
 import { openAssignment } from '../utils/eventCrypto';
 import { openParticipantView, ParticipantView } from '../utils/eventData';
 import { parseParticipantFragment } from '../utils/linkCodec';
@@ -135,6 +137,7 @@ export function ParticipantEvent() {
                 </h1>
                 <p className="text-gray-700">{t('participant.welcome', { name: load.name })}</p>
                 <EventDetailsBlock eventId={eventId} details={load.view.details} />
+                {credentials && <WishlistEditor credentials={credentials} />}
                 {!load.assignment && <p className="p-3 bg-gray-50 rounded text-gray-600">{t('participant.noDrawYet')}</p>}
                 {reveal.kind === 'error' && <p className="p-3 bg-gray-50 rounded text-gray-700">{t('participant.assignmentError')}</p>}
                 {reveal.kind === 'revealed' && (
@@ -145,11 +148,14 @@ export function ParticipantEvent() {
                       </div>
                     )}
                     <EnvelopeReveal receiverName={load.view.names[reveal.receiverId]} />
-                    {load.view.notes[reveal.receiverId] && (
-                      <div>
-                        <h2 className="text-sm font-medium text-gray-700 mb-1">{t('participant.organizersNote')}</h2>
-                        <p className="text-gray-700 whitespace-pre-wrap break-words">{load.view.notes[reveal.receiverId]}</p>
-                      </div>
+                    {credentials && (
+                      <ReceiverWishlist
+                        eventId={credentials.eventId}
+                        eventKey={credentials.eventKey}
+                        receiverId={reveal.receiverId}
+                        receiverName={load.view.names[reveal.receiverId]}
+                        organizersNote={load.view.notes[reveal.receiverId]}
+                      />
                     )}
                   </div>
                 )}
