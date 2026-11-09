@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { OrganizerCredentials } from './linkCodec';
 
 // The organizer's events known to this browser (ADR 0002: losing the
 // organizer link loses the event, so the home page keeps a local list).
@@ -8,6 +9,15 @@ export interface LocalEvent {
   organizerToken: string;
   title: string;
   createdAt: string;
+}
+
+// The same event as the organizer link carries it.
+export function credentialsOf({ id, key, organizerToken }: LocalEvent): OrganizerCredentials {
+  return { eventId: id, eventKey: key, organizerToken };
+}
+
+export function localEventOf({ eventId, eventKey, organizerToken }: OrganizerCredentials, title: string, createdAt: string): LocalEvent {
+  return { id: eventId, key: eventKey, organizerToken, title, createdAt };
 }
 
 const STORAGE_KEY = 'secretSantaEvents';

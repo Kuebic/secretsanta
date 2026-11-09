@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ParticipantStatus } from '../api/events';
 import { hasOpenedCurrentAssignment } from '../utils/draw';
+import { canShare, share } from '../utils/webShare';
 import { CopyButton } from './CopyButton';
 
 export interface StatusRow {
@@ -22,9 +23,6 @@ interface StatusTableProps {
 }
 
 type Filter = 'all' | 'notFilled';
-
-// Detected once: the Web Share API does not appear or disappear at runtime.
-const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
@@ -65,24 +63,13 @@ const nudgeButtonClass = 'px-2 py-1 border border-gray-300 rounded hover:bg-gray
 function Nudge({ message, title }: { message: string; title: string }) {
   const { t } = useTranslation();
 
-  const handleShare = async () => {
-    try {
-      await navigator.share({ title, text: message });
-    } catch (error) {
-      // Dismissing the share sheet rejects with AbortError; nothing to report.
-      if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        console.error('Failed to share:', error);
-      }
-    }
-  };
-
   return (
     <div className="flex flex-wrap gap-1 justify-end">
       <CopyButton textToCopy={message} className={nudgeButtonClass}>
         {t('status.copyNudge')}
       </CopyButton>
       {canShare && (
-        <button type="button" onClick={handleShare} className={nudgeButtonClass}>
+        <button type="button" onClick={() => share({ title, text: message })} className={nudgeButtonClass}>
           <ShareNetwork size={16} weight="bold" />
           {t('status.shareNudge')}
         </button>

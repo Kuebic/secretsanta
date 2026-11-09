@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Participants } from '../types';
 import { avoidPreviousDraw } from '../utils/avoidPreviousDraw';
 import { OrganizerCredentials, parseOrganizerLink } from '../utils/linkCodec';
-import { useLocalEvents } from '../utils/localEvents';
+import { credentialsOf, useLocalEvents } from '../utils/localEvents';
 import { loadPreviousDraw } from '../utils/previousDraw';
 
 interface PreviousDrawModalProps {
@@ -20,7 +20,7 @@ type ImportState =
   | { kind: 'done'; added: number; unmatched: string[] };
 
 export function PreviousDrawModal({ currentEventId, participants, onChangeParticipants, onClose }: PreviousDrawModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const localEvents = useLocalEvents().filter(event => event.id !== currentEventId);
   const [selectedId, setSelectedId] = useState('');
   const [link, setLink] = useState('');
@@ -37,7 +37,7 @@ export function PreviousDrawModal({ currentEventId, participants, onChangePartic
   const source = (): OrganizerCredentials | null => {
     if (link.trim()) return parseOrganizerLink(link);
     const local = localEvents.find(event => event.id === selectedId);
-    return local ? { eventId: local.id, eventKey: local.key, organizerToken: local.organizerToken } : null;
+    return local ? credentialsOf(local) : null;
   };
 
   const handleImport = async () => {
@@ -89,7 +89,7 @@ export function PreviousDrawModal({ currentEventId, participants, onChangePartic
               <option value="">{t('previousDraw.selectEvent')}</option>
               {localEvents.map(event => (
                 <option key={event.id} value={event.id}>
-                  {(event.title || t('events.untitled'))} · {new Date(event.createdAt).toLocaleDateString()}
+                  {(event.title || t('events.untitled'))} · {new Date(event.createdAt).toLocaleDateString(i18n.language)}
                 </option>
               ))}
             </select>

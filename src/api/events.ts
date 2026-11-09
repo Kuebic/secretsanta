@@ -42,6 +42,18 @@ async function request(method: string, eventId: string, token?: string, body?: u
   return response;
 }
 
+// A per-participant resource that may not exist yet: null on 404.
+async function fetchOptional<T>(eventId: string, resource: string): Promise<T | null> {
+  try {
+    return await (await request('GET', eventId, undefined, undefined, resource)).json() as T;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+const participantResource = (participantId: string, sub: string) => `/participants/${encodeURIComponent(participantId)}/${sub}`;
+
 export async function saveEvent(eventId: string, organizerToken: string, sealed: SealedEvent): Promise<{ createdAt: string; updatedAt: string }> {
   return (await request('PUT', eventId, organizerToken, sealed)).json();
 }
@@ -68,22 +80,13 @@ export async function deleteEvent(eventId: string, organizerToken: string): Prom
 
 // A giver's encrypted assignment and its timing, or null when the event has
 // no draw for them yet.
-export async function fetchAssignment(eventId: string, participantId: string): Promise<StoredAssignment | null> {
-  const response = await fetch(
-    `/api/events/${encodeURIComponent(eventId)}/participants/${encodeURIComponent(participantId)}/assignment`,
-  );
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new ApiError(response.status);
-  }
-  return await response.json() as StoredAssignment;
+export function fetchAssignment(eventId: string, participantId: string): Promise<StoredAssignment | null> {
+  return fetchOptional<StoredAssignment>(eventId, participantResource(participantId, 'assignment'));
 }
 
 // Records that the giver opened their assignment, with their own participant token.
 export async function markOpened(eventId: string, participantId: string, participantToken: string): Promise<string> {
-  const response = await request('POST', eventId, participantToken, undefined, `/participants/${encodeURIComponent(participantId)}/opened`);
+  const response = await request('POST', eventId, participantToken, undefined, participantResource(participantId, 'opened'));
   const { openedAt } = await response.json() as { openedAt: string };
   return openedAt;
 }
@@ -93,23 +96,14 @@ export interface StoredWishlist {
   wishlistUpdatedAt?: string;
 }
 
-const wishlistResource = (participantId: string) => `/participants/${encodeURIComponent(participantId)}/wishlist`;
-
 // A participant's sealed wishlist, or null when they have not written one yet.
-export async function fetchWishlist(eventId: string, participantId: string): Promise<StoredWishlist | null> {
-  const response = await fetch(`/api/events/${encodeURIComponent(eventId)}${wishlistResource(participantId)}`);
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new ApiError(response.status);
-  }
-  return await response.json() as StoredWishlist;
+export function fetchWishlist(eventId: string, participantId: string): Promise<StoredWishlist | null> {
+  return fetchOptional<StoredWishlist>(eventId, participantResource(participantId, 'wishlist'));
 }
 
 // Saves the participant's own sealed wishlist with their participant token.
 export async function saveWishlist(eventId: string, participantId: string, participantToken: string, wishlist: string): Promise<string> {
-  const response = await request('PUT', eventId, participantToken, { wishlist }, wishlistResource(participantId));
+  const response = await request('PUT', eventId, participantToken, { wishlist }, participantResource(participantId, 'wishlist'));
   const { wishlistUpdatedAt } = await response.json() as { wishlistUpdatedAt: string };
   return wishlistUpdatedAt;
 }

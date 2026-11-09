@@ -11,9 +11,28 @@ const ID = '[A-Za-z0-9_-]{22}';
 const KEY = '[A-Za-z0-9_-]{43}';
 const TOKEN = '[A-Za-z0-9_-]{22}';
 
+const ID_ONLY = new RegExp(`^${ID}$`);
 const ORGANIZER_PATH = new RegExp(`^/o/(${ID})$`);
+const PARTICIPANT_PATH = new RegExp(`^/p/(${ID})/(${ID})$`);
 // Organizer and participant links share the fragment shape: key, dot, token.
-const ORGANIZER_FRAGMENT = new RegExp(`^#(${KEY})\\.(${TOKEN})$`);
+const FRAGMENT = new RegExp(`^#(${KEY})\\.(${TOKEN})$`);
+
+function parseFragment(hash: string): { key: string; token: string } | null {
+  const match = FRAGMENT.exec(hash);
+  return match ? { key: match[1], token: match[2] } : null;
+}
+
+// A pasted link: its path must match, and its fragment carries the credentials.
+function parseLink<T>(link: string, path: RegExp, read: (pathParts: string[], hash: string) => T | null): T | null {
+  let url: URL;
+  try {
+    url = new URL(link.trim());
+  } catch {
+    return null;
+  }
+  const match = path.exec(url.pathname);
+  return match ? read(match.slice(1), url.hash) : null;
+}
 
 export function buildOrganizerLink(origin: string, { eventId, eventKey, organizerToken }: OrganizerCredentials): string {
   return `${origin}/o/${eventId}#${eventKey}.${organizerToken}`;
@@ -21,22 +40,15 @@ export function buildOrganizerLink(origin: string, { eventId, eventKey, organize
 
 // Parses the fragment of the current page or a pasted organizer link.
 export function parseOrganizerFragment(eventId: string, hash: string): OrganizerCredentials | null {
-  const match = ORGANIZER_FRAGMENT.exec(hash);
-  if (!match || !new RegExp(`^${ID}$`).test(eventId)) {
+  const fragment = parseFragment(hash);
+  if (!fragment || !ID_ONLY.test(eventId)) {
     return null;
   }
-  return { eventId, eventKey: match[1], organizerToken: match[2] };
+  return { eventId, eventKey: fragment.key, organizerToken: fragment.token };
 }
 
 export function parseOrganizerLink(link: string): OrganizerCredentials | null {
-  let url: URL;
-  try {
-    url = new URL(link.trim());
-  } catch {
-    return null;
-  }
-  const path = ORGANIZER_PATH.exec(url.pathname);
-  return path ? parseOrganizerFragment(path[1], url.hash) : null;
+  return parseLink(link, ORGANIZER_PATH, ([eventId], hash) => parseOrganizerFragment(eventId, hash));
 }
 
 export interface ParticipantCredentials {
@@ -46,29 +58,19 @@ export interface ParticipantCredentials {
   participantToken: string;
 }
 
-const PARTICIPANT_PATH = new RegExp(`^/p/(${ID})/(${ID})$`);
-const ID_ONLY = new RegExp(`^${ID}$`);
-
 export function buildParticipantLink(origin: string, { eventId, participantId, eventKey, participantToken }: ParticipantCredentials): string {
   return `${origin}/p/${eventId}/${participantId}#${eventKey}.${participantToken}`;
 }
 
 // Parses the fragment of the current participant page.
 export function parseParticipantFragment(eventId: string, participantId: string, hash: string): ParticipantCredentials | null {
-  const match = ORGANIZER_FRAGMENT.exec(hash);
-  if (!match || !ID_ONLY.test(eventId) || !ID_ONLY.test(participantId)) {
+  const fragment = parseFragment(hash);
+  if (!fragment || !ID_ONLY.test(eventId) || !ID_ONLY.test(participantId)) {
     return null;
   }
-  return { eventId, participantId, eventKey: match[1], participantToken: match[2] };
+  return { eventId, participantId, eventKey: fragment.key, participantToken: fragment.token };
 }
 
 export function parseParticipantLink(link: string): ParticipantCredentials | null {
-  let url: URL;
-  try {
-    url = new URL(link.trim());
-  } catch {
-    return null;
-  }
-  const path = PARTICIPANT_PATH.exec(url.pathname);
-  return path ? parseParticipantFragment(path[1], path[2], url.hash) : null;
+  return parseLink(link, PARTICIPANT_PATH, ([eventId, participantId], hash) => parseParticipantFragment(eventId, participantId, hash));
 }

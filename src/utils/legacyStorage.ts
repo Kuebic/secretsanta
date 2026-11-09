@@ -3,7 +3,7 @@ import { deleteEvent, saveAssignments, saveEvent } from '../api/events';
 import { mintEvent, sealAssignment } from './eventCrypto';
 import { sealEvent } from './eventData';
 import { mapLegacyData } from './legacyMigration';
-import { readLocalEvents, upsertLocalEvent } from './localEvents';
+import { localEventOf, readLocalEvents, upsertLocalEvent } from './localEvents';
 
 // The static version's localStorage keys.
 const LEGACY_KEYS = {
@@ -69,7 +69,7 @@ async function migrate(): Promise<void> {
   }
 
   localStorage.setItem(NOTICE_KEY, minted.eventId);
-  upsertLocalEvent({ id: minted.eventId, key: minted.eventKey, organizerToken: minted.organizerToken, title: event.details.title, createdAt });
+  upsertLocalEvent(localEventOf(credentials, event.details.title, createdAt));
   removeLegacyKeys();
   window.dispatchEvent(new Event(MIGRATED_EVENT));
 }

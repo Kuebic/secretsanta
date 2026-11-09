@@ -11,11 +11,11 @@ import { saveEvent } from '../api/events';
 import { mintEvent } from '../utils/eventCrypto';
 import { EMPTY_DETAILS, sealEvent } from '../utils/eventData';
 import { buildOrganizerLink } from '../utils/linkCodec';
-import { LocalEvent, upsertLocalEvent, useLocalEvents } from '../utils/localEvents';
+import { credentialsOf, LocalEvent, localEventOf, upsertLocalEvent, useLocalEvents } from '../utils/localEvents';
 import { useMigrationNotice } from '../utils/legacyStorage';
 
 function organizerLink(event: LocalEvent): string {
-  return buildOrganizerLink(window.location.origin, { eventId: event.id, eventKey: event.key, organizerToken: event.organizerToken });
+  return buildOrganizerLink(window.location.origin, credentialsOf(event));
 }
 
 function organizerPath(event: LocalEvent): string {
@@ -38,7 +38,7 @@ export function Home() {
       const credentials = { eventId: minted.eventId, eventKey: minted.eventKey, organizerToken: minted.organizerToken };
       const sealed = await sealEvent(credentials, { details: EMPTY_DETAILS, participants: {}, participantTokens: {} });
       const { createdAt } = await saveEvent(minted.eventId, minted.organizerToken, sealed);
-      const event: LocalEvent = { id: minted.eventId, key: minted.eventKey, organizerToken: minted.organizerToken, title: '', createdAt };
+      const event = localEventOf(credentials, '', createdAt);
       upsertLocalEvent(event);
       navigate(organizerPath(event));
     } catch (error) {

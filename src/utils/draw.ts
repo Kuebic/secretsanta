@@ -1,6 +1,7 @@
 import { AssignmentStatus, fetchAssignment } from '../api/events';
 import { Participants } from '../types';
 import { openAssignment, sealAssignment } from './eventCrypto';
+import { OrganizerCredentials } from './linkCodec';
 
 // The current draw as the organizer sees it: decrypted receivers, plus the
 // ciphertext the Worker holds for each giver so an unchanged assignment can
@@ -17,8 +18,7 @@ export const NO_DRAW: CurrentDraw = { receivers: {}, sealed: {} };
 // giver's assignment key (ADR 0003). Only givers the status lists as
 // assigned are fetched.
 export async function loadDraw(
-  eventId: string,
-  eventKey: string,
+  { eventId, eventKey }: OrganizerCredentials,
   participantTokens: Record<string, string>,
   status: Record<string, AssignmentStatus>,
 ): Promise<CurrentDraw> {

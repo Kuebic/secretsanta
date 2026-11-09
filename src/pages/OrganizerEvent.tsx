@@ -23,7 +23,7 @@ import { generatePairs } from '../utils/generatePairs';
 import { Participants } from '../types';
 import { EventContent, EventDetails, openEvent, sealEvent, withParticipantTokens } from '../utils/eventData';
 import { buildOrganizerLink, buildParticipantLink, OrganizerCredentials, parseOrganizerFragment } from '../utils/linkCodec';
-import { readLocalEvents, removeLocalEvent, upsertLocalEvent } from '../utils/localEvents';
+import { localEventOf, readLocalEvents, removeLocalEvent, upsertLocalEvent } from '../utils/localEvents';
 
 type LoadState =
   | { kind: 'loading' }
@@ -35,7 +35,7 @@ type SaveState = 'saved' | 'pending' | 'saving' | 'error' | 'tooLarge';
 const SAVE_DELAY_MS = 800;
 
 function rememberLocally(credentials: OrganizerCredentials, title: string, createdAt: string) {
-  upsertLocalEvent({ id: credentials.eventId, key: credentials.eventKey, organizerToken: credentials.organizerToken, title, createdAt });
+  upsertLocalEvent(localEventOf(credentials, title, createdAt));
 }
 
 export function OrganizerEvent() {
@@ -93,7 +93,7 @@ export function OrganizerEvent() {
       // Opening an organizer link on a fresh browser adds the event to its home page.
       rememberLocally(credentials, opened.details.title, stored.createdAt);
       try {
-        const current = await loadDraw(credentials.eventId, credentials.eventKey, opened.participantTokens, stored.status ?? {});
+        const current = await loadDraw(credentials, opened.participantTokens, stored.status ?? {});
         if (!cancelled) setDraw(current);
       } catch (error) {
         console.error('Failed to read the current draw:', error);
@@ -265,6 +265,14 @@ export function OrganizerEvent() {
     </button>
   );
 
+  // Each participant's own link: event key and their token in the fragment.
+  const participantLink = (participantId: string) => buildParticipantLink(window.location.origin, {
+    eventId: credentials.eventId,
+    participantId,
+    eventKey: credentials.eventKey,
+    participantToken: content.participantTokens[participantId],
+  });
+
   const saveMessage = {
     saved: t('organizer.saved'),
     pending: t('organizer.saving'),
@@ -363,12 +371,7 @@ export function OrganizerEvent() {
                       key={participant.id}
                       name={participant.name}
                       eventTitle={content.details.title}
-                      link={buildParticipantLink(window.location.origin, {
-                        eventId: credentials.eventId,
-                        participantId: participant.id,
-                        eventKey: credentials.eventKey,
-                        participantToken: content.participantTokens[participant.id],
-                      })}
+                      link={participantLink(participant.id)}
                     />
                   ))}
                 </div>
@@ -384,12 +387,7 @@ export function OrganizerEvent() {
                   rows={Object.values(content.participants).map(participant => ({
                     id: participant.id,
                     name: participant.name,
-                    link: buildParticipantLink(window.location.origin, {
-                      eventId: credentials.eventId,
-                      participantId: participant.id,
-                      eventKey: credentials.eventKey,
-                      participantToken: content.participantTokens[participant.id],
-                    }),
+                    link: participantLink(participant.id),
                   }))}
                   status={status}
                   eventTitle={content.details.title}
