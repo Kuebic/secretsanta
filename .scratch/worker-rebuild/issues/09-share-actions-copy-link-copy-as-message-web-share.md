@@ -4,12 +4,12 @@
 
 **Blocked by:** 07
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#9
 
-- [ ] Copy link copies the bare URL
-- [ ] Copy as message copies a translated greeting + link, personalised with the participant's name
-- [ ] Share button appears only when `navigator.share` exists and calls it with title + URL
-- [ ] Works on the pre-draw link list and after the draw
-- [ ] No email or phone fields anywhere
+- [x] Copy link copies the bare URL
+- [x] Copy as message copies a translated greeting + link, personalised with the participant's name
+- [x] Share button appears only when `navigator.share` exists and calls it with title + URL
+- [x] Works on the pre-draw link list and after the draw
+- [x] No email or phone fields anywhere
