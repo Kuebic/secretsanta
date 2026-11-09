@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInstance } from 'i18next';
 import { en } from './en';
 import { fr } from './fr';
+import { frAwaitingNativeReview } from './frReview';
 
 type Tree = { [key: string]: string | Tree };
 
@@ -81,5 +82,14 @@ describe('French locale', () => {
       key => lookup(fr as Tree, key) === lookup(en as Tree, key) && !sameInBothLanguages.includes(key)
     );
     expect(copiedFromEnglish).toEqual([]);
+  });
+
+  it('marks machine-drafted strings for a native review with keys that exist in French', () => {
+    const frKeys = leafKeys(fr as Tree);
+    const unknown = frAwaitingNativeReview.filter(
+      marked => !frKeys.some(key => key === marked || key.startsWith(`${marked}.`))
+    );
+    expect(frAwaitingNativeReview.length).toBeGreaterThan(0);
+    expect(unknown).toEqual([]);
   });
 });
