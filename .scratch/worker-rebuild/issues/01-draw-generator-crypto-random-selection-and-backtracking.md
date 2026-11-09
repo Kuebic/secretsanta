@@ -4,12 +4,12 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#1
 
-- [ ] Any feasible combination of Must / Must Not rules produces a draw (backtracking, no retry cap that can fail on a solvable input)
-- [ ] Infeasible rule sets still report failure with the existing error
-- [ ] Random choice uses `crypto.getRandomValues`, not `Math.random`
-- [ ] Property-based tests cover: every participant gives once and receives once, nobody receives from themselves, all rules honoured, feasible-but-tight constraints (e.g. chain of Must Not rules) always solve
-- [ ] Existing generator tests still pass
+- [x] Any feasible combination of Must / Must Not rules produces a draw (backtracking, no retry cap that can fail on a solvable input)
+- [x] Infeasible rule sets still report failure with the existing error
+- [x] Random choice uses `crypto.getRandomValues`, not `Math.random`
+- [x] Property-based tests cover: every participant gives once and receives once, nobody receives from themselves, all rules honoured, feasible-but-tight constraints (e.g. chain of Must Not rules) always solve
+- [x] Existing generator tests still pass
