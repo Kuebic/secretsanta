@@ -17,10 +17,8 @@
   "kv_namespaces": [
     {
       "binding": "EVENTS",
-      // PLACEHOLDER: the real namespace is created by a human in ticket 14
-      // (.scratch/worker-rebuild/issues/14-create-the-kv-namespace-deploy-verify-end-to-end.md).
-      // `wrangler dev` and tests use local KV, so this id only matters for `npm run deploy`.
-      "id": "00000000000000000000000000000000"
+      // Created 2026-11-09 on the personal account (ticket 14). `wrangler dev` and tests use local KV.
+      "id": "cf65a224cd7749559205f18325a2c8b9"
     }
   ]
 }
