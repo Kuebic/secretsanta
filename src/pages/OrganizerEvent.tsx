@@ -110,7 +110,7 @@ export function OrganizerEvent() {
     setIsRefreshingStatus(true);
     setStatusError(false);
     try {
-      setStatus(await fetchStatus(credentials.eventId, credentials.organizerToken));
+      setStatus(await fetchStatus(credentials.eventId));
     } catch (error) {
       console.error('Failed to refresh status:', error);
       setStatusError(true);
@@ -195,7 +195,7 @@ export function OrganizerEvent() {
       const next = await sealDraw(credentials.eventKey, content.participantTokens, receivers, draw);
       await saveAssignments(credentials.eventId, credentials.organizerToken, next.sealed);
       setDraw(next);
-      setStatus(await fetchStatus(credentials.eventId, credentials.organizerToken));
+      setStatus(await fetchStatus(credentials.eventId));
     } catch (error) {
       console.error('Failed to save the draw:', error);
       setDrawErrorKey('draw.saveError');

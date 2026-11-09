@@ -145,7 +145,7 @@ describe('events API: organizer token', () => {
   });
 });
 
-describe('events API: details and roster blobs', () => {
+describe('events API: details after a draw', () => {
   it('new details written after the draw are served on the next read, and the same participant links still open their assignments', async () => {
     await createEvent();
     await call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } } });
@@ -158,49 +158,14 @@ describe('events API: details and roster blobs', () => {
     expect((await call('POST', `/api/events/${EVENT_ID}/participants/${P1}/opened`, { token: 't1' })).status).toBe(200);
   });
 
-  it('reads and writes the details blob on its own', async () => {
-    await createEvent();
-    const put = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(70, 'N') } });
-    expect(put.status).toBe(200);
-    const get = await call('GET', `/api/events/${EVENT_ID}/details`);
-    expect(await get.json()).toEqual({ details: blob(70, 'N') });
-  });
-
-  it('reads and writes the roster blob on its own, without exposing token hashes', async () => {
-    await createEvent();
-    const put = await call('PUT', `/api/events/${EVENT_ID}/roster`, {
-      token: ORGANIZER_TOKEN,
-      body: { roster: blob(70, 'S'), organizer: blob(70, 'T'), participantTokenHashes: { [P1]: await hashToken('t1') } },
-    });
-    expect(put.status).toBe(200);
-    const get = await call('GET', `/api/events/${EVENT_ID}/roster`);
-    expect(await get.json()).toEqual({ roster: blob(70, 'S'), organizer: blob(70, 'T') });
-  });
-
-  it('refuses details and roster writes with a wrong or missing token', async () => {
-    await createEvent();
-    const details = { details: blob(70, 'N') };
-    const roster = { roster: blob(70, 'S'), organizer: blob(70, 'T'), participantTokenHashes: {} };
-    expect((await call('PUT', `/api/events/${EVENT_ID}/details`, { token: OTHER_TOKEN, body: details })).status).toBe(403);
-    expect((await call('PUT', `/api/events/${EVENT_ID}/details`, { body: details })).status).toBe(401);
-    expect((await call('PUT', `/api/events/${EVENT_ID}/roster`, { token: OTHER_TOKEN, body: roster })).status).toBe(403);
-    expect((await call('PUT', `/api/events/${EVENT_ID}/roster`, { body: roster })).status).toBe(401);
-    expect(await (await call('GET', `/api/events/${EVENT_ID}/details`)).json()).toEqual({ details: blob(64, 'D') });
-  });
-
-  it('answers 404 for blobs of an unknown event, even with a token', async () => {
-    expect((await call('GET', `/api/events/${EVENT_ID}/details`)).status).toBe(404);
-    expect((await call('GET', `/api/events/${EVENT_ID}/roster`)).status).toBe(404);
-    expect((await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob() } })).status).toBe(404);
-  });
 });
 
 describe('events API: limits', () => {
   it('accepts a blob of exactly 16 KB and rejects one byte more', async () => {
     await createEvent();
-    const ok = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(16 * 1024) } });
+    const ok = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details: blob(16 * 1024) }) });
     expect(ok.status).toBe(200);
-    const tooBig = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(16 * 1024 + 1) } });
+    const tooBig = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details: blob(16 * 1024 + 1) }) });
     expect(tooBig.status).toBe(413);
     const roster = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ roster: blob(16 * 1024 + 1) }) });
     expect(roster.status).toBe(413);
@@ -208,7 +173,7 @@ describe('events API: limits', () => {
 
   it('rejects a request body far over the limit before parsing it', async () => {
     await createEvent();
-    const response = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: 'x'.repeat(200 * 1024) });
+    const response = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: 'x'.repeat(200 * 1024) });
     expect(response.status).toBe(413);
   });
 
@@ -229,7 +194,7 @@ describe('events API: limits', () => {
   it('rejects blobs that are not ciphertext', async () => {
     await createEvent();
     for (const details of ['{"title":"Family Christmas"}', 'Family Christmas', 'short', 42, null]) {
-      const response = await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details } });
+      const response = await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details }) });
       expect(response.status).toBe(400);
     }
   });
@@ -255,24 +220,17 @@ describe('events API: TTL', () => {
 
   it('refreshes the TTL of every event entry on each organizer write', async () => {
     await createEvent();
-    await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(70, 'N') } });
+    await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details: blob(70, 'N') }) });
     for (const entry of kv.store.values()) {
       expect(entry.writes).toBe(2);
       expect(entry.expirationTtl).toBe(THIRTEEN_MONTHS);
-    }
-    await call('PUT', `/api/events/${EVENT_ID}/roster`, {
-      token: ORGANIZER_TOKEN,
-      body: { roster: blob(70, 'S'), organizer: blob(70, 'T'), participantTokenHashes: {} },
-    });
-    for (const entry of kv.store.values()) {
-      expect(entry.writes).toBe(3);
     }
   });
 
   it('does not refresh anything on reads or refused writes', async () => {
     await createEvent();
     await call('GET', `/api/events/${EVENT_ID}`);
-    await call('PUT', `/api/events/${EVENT_ID}/details`, { token: OTHER_TOKEN, body: { details: blob(70, 'N') } });
+    await call('PUT', `/api/events/${EVENT_ID}`, { token: OTHER_TOKEN, body: await eventBody({ details: blob(70, 'N') }) });
     for (const entry of kv.store.values()) {
       expect(entry.writes).toBe(1);
     }
@@ -282,7 +240,7 @@ describe('events API: TTL', () => {
     await createEvent();
     const before = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
     await new Promise(resolve => setTimeout(resolve, 5));
-    await call('PUT', `/api/events/${EVENT_ID}/details`, { token: ORGANIZER_TOKEN, body: { details: blob(70, 'N') } });
+    await call('PUT', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN, body: await eventBody({ details: blob(70, 'N') }) });
     const after = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
     expect(after.createdAt).toBe(before.createdAt);
     expect(after.updatedAt > before.updatedAt).toBe(true);
@@ -525,16 +483,14 @@ describe('events API: wishlists', () => {
   });
 });
 
-describe('events API: organizer status', () => {
-  const statusPath = `/api/events/${EVENT_ID}/status`;
-
-  it('lists every participant\'s wishlistUpdatedAt and openedAt in one call with the organizer token', async () => {
+describe('events API: status listing', () => {
+  it('lists every participant\'s wishlistUpdatedAt and openedAt with the event, in one call', async () => {
     await createEvent();
     const saved = await (await call('PUT', `/api/events/${EVENT_ID}/participants/${P2}/wishlist`, { token: 't2', body: { wishlist: blob(64, 'W') } })).json();
     await call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } } });
     const opened = await (await call('POST', `/api/events/${EVENT_ID}/participants/${P1}/opened`, { token: 't1' })).json();
 
-    const response = await call('GET', statusPath, { token: ORGANIZER_TOKEN });
+    const response = await call('GET', `/api/events/${EVENT_ID}`);
     expect(response.status).toBe(200);
     const { status } = await response.json();
     expect(Object.keys(status).sort()).toEqual([P1, P2].sort());
@@ -544,14 +500,11 @@ describe('events API: organizer status', () => {
     expect(status[P2].openedAt).toBeUndefined();
   });
 
-  it('refuses the status listing with a participant token, a wrong token, or no token', async () => {
+  it('serves no route for details, roster or status on their own', async () => {
     await createEvent();
-    expect((await call('GET', statusPath, { token: 't1' })).status).toBe(403);
-    expect((await call('GET', statusPath, { token: OTHER_TOKEN })).status).toBe(403);
-    expect((await call('GET', statusPath)).status).toBe(401);
-  });
-
-  it('answers 404 for the status of an unknown event', async () => {
-    expect((await call('GET', statusPath, { token: ORGANIZER_TOKEN })).status).toBe(404);
+    for (const sub of ['details', 'roster', 'status']) {
+      expect((await call('GET', `/api/events/${EVENT_ID}/${sub}`, { token: ORGANIZER_TOKEN })).status).toBe(404);
+      expect((await call('PUT', `/api/events/${EVENT_ID}/${sub}`, { token: ORGANIZER_TOKEN, body: { [sub]: blob() } })).status).toBe(404);
+    }
   });
 });

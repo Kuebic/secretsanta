@@ -251,47 +251,6 @@ async function getEvent(env: Env, id: string): Promise<Response> {
   });
 }
 
-// The organizer's status table: per-participant timing only, behind the
-// organizer token.
-async function getStatus(request: Request, env: Env, id: string): Promise<Response> {
-  const meta = await requireEvent(env, id);
-  await authorizeOrganizer(request, meta);
-  const { roster } = await readStored(env, id);
-  return json({ status: await readStatus(env, id, roster) });
-}
-
-async function putDetails(request: Request, env: Env, id: string): Promise<Response> {
-  const meta = await requireEvent(env, id);
-  await authorizeOrganizer(request, meta);
-  const details = ciphertext((await readJson(request)).details);
-  const { roster } = await readStored(env, id);
-  const updated = { ...meta, updatedAt: new Date().toISOString() };
-  await writeEvent(env, id, updated, details, roster);
-  return json({ updatedAt: updated.updatedAt });
-}
-
-async function getDetails(env: Env, id: string): Promise<Response> {
-  await requireEvent(env, id);
-  const { details } = await readStored(env, id);
-  return json({ details });
-}
-
-async function putRoster(request: Request, env: Env, id: string): Promise<Response> {
-  const meta = await requireEvent(env, id);
-  await authorizeOrganizer(request, meta);
-  const roster = rosterFromBody(await readJson(request));
-  const { details } = await readStored(env, id);
-  const updated = { ...meta, updatedAt: new Date().toISOString() };
-  await writeEvent(env, id, updated, details, roster);
-  return json({ updatedAt: updated.updatedAt });
-}
-
-async function getRoster(env: Env, id: string): Promise<Response> {
-  await requireEvent(env, id);
-  const { roster } = await readStored(env, id);
-  return json({ roster: roster.roster, organizer: roster.organizer });
-}
-
 // One ciphertext per giver, each sealed with a key only that giver's token
 // derives (ADR 0003). A draw replaces the previous one entirely.
 async function putAssignments(request: Request, env: Env, id: string): Promise<Response> {
@@ -433,16 +392,6 @@ export async function handleEvents(request: Request, env: Env, path: string[]): 
         return await getEvent(env, id);
       case 'DELETE ':
         return await deleteEvent(request, env, id);
-      case 'PUT details':
-        return await putDetails(request, env, id);
-      case 'GET details':
-        return await getDetails(env, id);
-      case 'PUT roster':
-        return await putRoster(request, env, id);
-      case 'GET roster':
-        return await getRoster(env, id);
-      case 'GET status':
-        return await getStatus(request, env, id);
       case 'PUT assignments':
         return await putAssignments(request, env, id);
     }

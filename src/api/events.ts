@@ -58,9 +58,10 @@ export async function fetchEvent(eventId: string): Promise<StoredEvent> {
 }
 
 // The organizer's status table: per-participant wishlist and opened timing.
-export async function fetchStatus(eventId: string, organizerToken: string): Promise<Record<string, ParticipantStatus>> {
-  const { status } = await (await request('GET', eventId, organizerToken, undefined, '/status')).json() as { status: Record<string, ParticipantStatus> };
-  return status;
+// Timing is plaintext the event GET already carries (ADR 0002), so there is
+// no separate call.
+export async function fetchStatus(eventId: string): Promise<Record<string, ParticipantStatus>> {
+  return (await fetchEvent(eventId)).status;
 }
 
 // One ciphertext per giver; replaces the whole draw.
