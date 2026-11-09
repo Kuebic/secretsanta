@@ -6,16 +6,16 @@ Server never sees plaintext (ADR 0002). Current "Additional instructions" become
 
 **Blocked by:** 03
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#4
 
-- [ ] New event mints 128-bit event ID, 256-bit AES-GCM key, 128-bit organizer token, 128-bit participant tokens; all base64url
-- [ ] API: PUT/GET event details blob, PUT/GET roster blob; writes require organizer token, server stores SHA-256 of tokens only
-- [ ] Blobs are ciphertext; server rejects bodies over 16 KB and rosters over 100 participants
-- [ ] KV entries carry a 13-month TTL refreshed on every organizer write
-- [ ] Organizer can delete the event (all keys removed)
-- [ ] Organizer link opens the event on a fresh browser with roster and details decrypted
-- [ ] Home page lists local events (title, date created), "Copy organizer link" per event, "New event"
-- [ ] Participant names never appear in any request body or URL in plaintext
-- [ ] Worker route logic covered by Vitest
+- [x] New event mints 128-bit event ID, 256-bit AES-GCM key, 128-bit organizer token, 128-bit participant tokens; all base64url
+- [x] API: PUT/GET event details blob, PUT/GET roster blob; writes require organizer token, server stores SHA-256 of tokens only
+- [x] Blobs are ciphertext; server rejects bodies over 16 KB and rosters over 100 participants
+- [x] KV entries carry a 13-month TTL refreshed on every organizer write
+- [x] Organizer can delete the event (all keys removed)
+- [x] Organizer link opens the event on a fresh browser with roster and details decrypted
+- [x] Home page lists local events (title, date created), "Copy organizer link" per event, "New event"
+- [x] Participant names never appear in any request body or URL in plaintext
+- [x] Worker route logic covered by Vitest
