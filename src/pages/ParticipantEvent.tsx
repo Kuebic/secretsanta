@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { Layout } from '../components/Layout';
 import { PageTransition } from '../components/PageTransition';
 import { PostCard } from '../components/PostCard';
-import { ApiError, fetchAssignment, fetchEvent } from '../api/events';
+import { ApiError, fetchAssignment, fetchEvent, markOpened, StoredAssignment } from '../api/events';
+import { EnvelopeReveal } from '../components/EnvelopeReveal';
+import { openAssignment } from '../utils/eventCrypto';
 import { openParticipantView, ParticipantView } from '../utils/eventData';
 import { parseParticipantFragment } from '../utils/linkCodec';
 
@@ -13,7 +15,18 @@ type ErrorKey = 'participant.badLink' | 'participant.notFound' | 'participant.no
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'error'; messageKey: ErrorKey }
-  | { kind: 'ready'; view: ParticipantView; name: string; hasDraw: boolean };
+  | { kind: 'ready'; view: ParticipantView; name: string; assignment: StoredAssignment | null };
+
+type Reveal =
+  | { kind: 'none' }
+  | { kind: 'error' }
+  | { kind: 'revealed'; receiverId: string; changed: boolean };
+
+// The assignment was re-drawn with a different receiver after the giver last
+// opened it (the Worker keeps assignedAt when the receiver is unchanged).
+function changedSinceOpened({ assignedAt, openedAt }: StoredAssignment): boolean {
+  return Boolean(assignedAt && openedAt && Date.parse(assignedAt) > Date.parse(openedAt));
+}
 
 type Identity = 'unconfirmed' | 'confirmed' | 'wrongLink';
 
@@ -25,6 +38,28 @@ export function ParticipantEvent() {
   const [credentials] = useState(() => parseParticipantFragment(eventId, participantId, hash));
   const [load, setLoad] = useState<LoadState>(() => credentials ? { kind: 'loading' } : { kind: 'error', messageKey: 'participant.badLink' });
   const [identity, setIdentity] = useState<Identity>('unconfirmed');
+  const [reveal, setReveal] = useState<Reveal>({ kind: 'none' });
+
+  // Nothing is decrypted or marked opened before identity confirmation.
+  const confirm = async () => {
+    setIdentity('confirmed');
+    if (!credentials || load.kind !== 'ready' || !load.assignment) return;
+    let receiverId;
+    try {
+      receiverId = await openAssignment(credentials.eventKey, credentials.participantToken, load.assignment.assignment);
+    } catch (error) {
+      console.error('Failed to decrypt the assignment:', error);
+      setReveal({ kind: 'error' });
+      return;
+    }
+    if (load.view.names[receiverId] === undefined) {
+      setReveal({ kind: 'error' });
+      return;
+    }
+    setReveal({ kind: 'revealed', receiverId, changed: changedSinceOpened(load.assignment) });
+    markOpened(credentials.eventId, credentials.participantId, credentials.participantToken)
+      .catch(error => console.error('Failed to record that the assignment was opened:', error));
+  };
 
   useEffect(() => {
     if (!credentials) return;
@@ -52,7 +87,7 @@ export function ParticipantEvent() {
       if (name === undefined) {
         return fail('participant.notInEvent');
       }
-      if (!cancelled) setLoad({ kind: 'ready', view, name, hasDraw: assignment !== null });
+      if (!cancelled) setLoad({ kind: 'ready', view, name, assignment });
     })();
     return () => {
       cancelled = true;
@@ -74,7 +109,7 @@ export function ParticipantEvent() {
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
                     type="button"
-                    onClick={() => setIdentity('confirmed')}
+                    onClick={confirm}
                     className="flex-1 p-2 bg-red-700 text-white rounded hover:bg-red-800"
                   >
                     {t('participant.yes')}
@@ -104,7 +139,24 @@ export function ParticipantEvent() {
                     <p className="text-gray-700 whitespace-pre-wrap break-words">{load.view.details.notes}</p>
                   </div>
                 )}
-                {!load.hasDraw && <p className="p-3 bg-gray-50 rounded text-gray-600">{t('participant.noDrawYet')}</p>}
+                {!load.assignment && <p className="p-3 bg-gray-50 rounded text-gray-600">{t('participant.noDrawYet')}</p>}
+                {reveal.kind === 'error' && <p className="p-3 bg-gray-50 rounded text-gray-700">{t('participant.assignmentError')}</p>}
+                {reveal.kind === 'revealed' && (
+                  <div className="space-y-4">
+                    {reveal.changed && (
+                      <div role="alert" className="p-3 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded text-sm">
+                        {t('participant.changed')}
+                      </div>
+                    )}
+                    <EnvelopeReveal receiverName={load.view.names[reveal.receiverId]} />
+                    {load.view.notes[reveal.receiverId] && (
+                      <div>
+                        <h2 className="text-sm font-medium text-gray-700 mb-1">{t('participant.organizersNote')}</h2>
+                        <p className="text-gray-700 whitespace-pre-wrap break-words">{load.view.notes[reveal.receiverId]}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
