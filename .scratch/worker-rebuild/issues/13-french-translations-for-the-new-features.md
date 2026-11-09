@@ -4,10 +4,10 @@
 
 **Blocked by:** 08, 09, 10, 11, 12, 05
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **GitHub:** Kuebic/secretsanta#13
 
-- [ ] No missing-key fallbacks to English in the fr locale (automated check in tests)
-- [ ] Drafted strings tagged with a comment or marker list for review
-- [ ] Greeting and nudge messages read naturally in French
+- [x] No missing-key fallbacks to English in the fr locale (automated check in tests)
+- [x] Drafted strings tagged with a comment or marker list for review
+- [x] Greeting and nudge messages read naturally in French
