@@ -4,6 +4,9 @@ import { Participant, Rule } from '../types';
 import { useTranslation } from 'react-i18next';
 import { produce } from "immer";
 
+/** A rule being edited. `bothWays` on a Must Not makes it a Mutual exclusion. */
+type DraftRule = Rule & { bothWays: boolean };
+
 interface RulesModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -21,7 +24,18 @@ export function RulesModal({
 }: RulesModalProps) {
   const { t } = useTranslation();
   const participant = participants[participantId];
-  const [localRules, setLocalRules] = useState<Rule[]>(participant.rules);
+  const hasReverseMustNot = (targetId: string) =>
+    participants[targetId]?.rules.some(r => r.type === 'mustNot' && r.targetParticipantId === participantId) ?? false;
+  const hasReverseMust = (targetId: string) =>
+    participants[targetId]?.rules.some(r => r.type === 'must' && r.targetParticipantId === participantId) ?? false;
+
+  const [localRules, setLocalRules] = useState<DraftRule[]>(() => participant.rules.map(rule => ({
+    ...rule,
+    bothWays: rule.type === 'mustNot' && hasReverseMustNot(rule.targetParticipantId),
+  })));
+  // Participants whose Must Not rule back to this participant goes when we save.
+  const [removeOtherSideOf, setRemoveOtherSideOf] = useState<string[]>([]);
+  const [pendingRemoval, setPendingRemoval] = useState<number | null>(null);
   const [localHint, setLocalHint] = useState<string>(participant.hint || '');
 
   // Add escape key handler
@@ -41,22 +55,60 @@ export function RulesModal({
   }, [isOpen, onClose]);
 
   const addRule = (type: 'must' | 'mustNot') => {
-    setLocalRules([...localRules, { type, targetParticipantId: '' }]);
+    setLocalRules([...localRules, { type, targetParticipantId: '', bothWays: type === 'mustNot' }]);
   };
 
   const updateRule = (index: number, targetParticipantId: string) => {
-    const newRules = [...localRules];
-    newRules[index].targetParticipantId = targetParticipantId;
-    setLocalRules(newRules);
+    setLocalRules(localRules.map((rule, i) => i === index ? { ...rule, targetParticipantId } : rule));
   };
 
-  const removeRule = (index: number) => {
+  const setBothWays = (index: number, bothWays: boolean) => {
+    setLocalRules(localRules.map((rule, i) => i === index ? { ...rule, bothWays } : rule));
+  };
+
+  const removeRule = (index: number, alsoOtherSide = false) => {
+    const rule = localRules[index];
+    if (alsoOtherSide) {
+      setRemoveOtherSideOf([...removeOtherSideOf, rule.targetParticipantId]);
+    }
     setLocalRules(localRules.filter((_, i) => i !== index));
+    setPendingRemoval(null);
+  };
+
+  const requestRemoveRule = (index: number) => {
+    const rule = localRules[index];
+    if (rule.type === 'mustNot' && hasReverseMustNot(rule.targetParticipantId)) {
+      setPendingRemoval(index);
+    } else {
+      removeRule(index);
+    }
   };
 
   const handleSave = () => {
     onChangeParticipants(produce(participants, draft => {
-      draft[participantId].rules = localRules;
+      const removeReverse = (targetId: string) => {
+        const target = draft[targetId];
+        if (!target) return;
+        target.rules = target.rules.filter(r => !(r.type === 'mustNot' && r.targetParticipantId === participantId));
+      };
+
+      for (const targetId of removeOtherSideOf) {
+        removeReverse(targetId);
+      }
+
+      for (const rule of localRules) {
+        if (rule.type !== 'mustNot' || !draft[rule.targetParticipantId]) continue;
+        if (rule.bothWays && !hasReverseMust(rule.targetParticipantId)) {
+          const target = draft[rule.targetParticipantId];
+          if (!target.rules.some(r => r.type === 'mustNot' && r.targetParticipantId === participantId)) {
+            target.rules.push({ type: 'mustNot', targetParticipantId: participantId });
+          }
+        } else if (!rule.bothWays) {
+          removeReverse(rule.targetParticipantId);
+        }
+      }
+
+      draft[participantId].rules = localRules.map(({ type, targetParticipantId }) => ({ type, targetParticipantId }));
       draft[participantId].hint = localHint || undefined;
     }));
     onClose();
@@ -89,8 +141,38 @@ export function RulesModal({
         </div>
         
         <div className="space-y-4 mb-6">
-          {localRules.map((rule, index) => (
-            <div key={index} className="flex gap-2 items-center">
+          {localRules.map((rule, index) => pendingRemoval === index ? (
+            <div key={index} className="p-2 border border-red-300 rounded bg-red-50 space-y-2">
+              <p className="text-sm">
+                {t('rules.mutualExclusionRemovePrompt', {
+                  name: participant.name,
+                  other: participants[rule.targetParticipantId]?.name ?? '',
+                })}
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setPendingRemoval(null)}
+                  className="px-3 py-1 text-gray-600 hover:text-gray-800"
+                >
+                  {t('rules.cancel')}
+                </button>
+                <button
+                  onClick={() => removeRule(index)}
+                  className="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300"
+                >
+                  {t('rules.mutualExclusionRemoveOneSide')}
+                </button>
+                <button
+                  onClick={() => removeRule(index, true)}
+                  className="px-3 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                >
+                  {t('rules.mutualExclusionRemoveBothSides')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div key={index} className="space-y-1">
+            <div className="flex gap-2 items-center">
               <span>
                 {rule.type === 'must' 
                   ? t('rules.mustBePairedWith')
@@ -111,12 +193,30 @@ export function RulesModal({
                 }
               </select>
               <button
-                onClick={() => removeRule(index)}
+                onClick={() => requestRemoveRule(index)}
                 className="p-2 text-red-500 hover:text-red-700"
                 aria-label={t('rules.removeRule')}
               >
                 <X size={20} weight="bold" />
               </button>
+            </div>
+            {rule.type === 'mustNot' && (() => {
+              const blocked = rule.targetParticipantId !== '' && hasReverseMust(rule.targetParticipantId);
+              return (
+                <label className={`flex items-center gap-2 text-sm pl-1 ${blocked ? 'text-gray-400' : 'text-gray-700'}`}>
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={rule.bothWays && !blocked}
+                    disabled={blocked}
+                    onChange={(e) => setBothWays(index, e.target.checked)}
+                  />
+                  {blocked
+                    ? t('rules.mutualExclusionBlocked', { other: participants[rule.targetParticipantId]?.name ?? '' })
+                    : t('rules.mutualExclusion')}
+                </label>
+              );
+            })()}
             </div>
           ))}
         </div>

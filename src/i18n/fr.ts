@@ -60,6 +60,11 @@ export const fr: Translations = {
     saveRules: "Enregistrer les Règles",
     hintLabel: 'Suggestions pour le cadeau',
     hintPlaceholder: 'Entrez une indication sur le type de cadeau adapté à ce participant (optionnel)',
+    mutualExclusion: "Exclusion mutuelle : dans les deux sens",
+    mutualExclusionBlocked: "Exclusion mutuelle impossible : {{other}} doit être associé avec ce participant",
+    mutualExclusionRemovePrompt: "{{other}} a aussi une règle d'exclusion envers {{name}} (exclusion mutuelle). Supprimer aussi cette règle ?",
+    mutualExclusionRemoveOneSide: "Seulement celle-ci",
+    mutualExclusionRemoveBothSides: "Supprimer les deux",
   },
   links: {
     title: "Liens à Partager",

@@ -47,7 +47,12 @@ export function ParticipantRow({
               : t('participants.editRules')
             }
           >
-            <Gear className="h-4" weight="bold" />
+            <span className="flex items-center gap-1">
+              <Gear className="h-4" weight="bold" />
+              {participant.rules.length > 0 && (
+                <span className="text-xs font-bold">{participant.rules.length}</span>
+              )}
+            </span>
           </button>
           <button
             onClick={onRemove}

@@ -58,6 +58,11 @@ export const en = {
     saveRules: "Save Rules",
     hintLabel: 'Gift Hint',
     hintPlaceholder: 'Enter a hint about gift preferences (optional)',
+    mutualExclusion: "Mutual exclusion: both ways",
+    mutualExclusionBlocked: "Mutual exclusion unavailable: {{other}} must be paired with this participant",
+    mutualExclusionRemovePrompt: "{{other}} also has a Must Not rule for {{name}} (Mutual exclusion). Remove that side too?",
+    mutualExclusionRemoveOneSide: "Only this side",
+    mutualExclusionRemoveBothSides: "Remove both sides",
   },
   links: {
     title: "Links to Share",
