@@ -57,6 +57,12 @@ export async function fetchEvent(eventId: string): Promise<StoredEvent> {
   return (await request('GET', eventId)).json();
 }
 
+// The organizer's status table: per-participant wishlist and opened timing.
+export async function fetchStatus(eventId: string, organizerToken: string): Promise<Record<string, ParticipantStatus>> {
+  const { status } = await (await request('GET', eventId, organizerToken, undefined, '/status')).json() as { status: Record<string, ParticipantStatus> };
+  return status;
+}
+
 // One ciphertext per giver; replaces the whole draw.
 export async function saveAssignments(eventId: string, organizerToken: string, assignments: Record<string, string>): Promise<void> {
   await request('PUT', eventId, organizerToken, { assignments }, '/assignments');

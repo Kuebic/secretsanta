@@ -15,7 +15,8 @@ import { PreviousDrawModal } from '../components/PreviousDrawModal';
 import { RulesModal } from '../components/RulesModal';
 import { ShareActions } from '../components/ShareActions';
 import { MenuItem } from '../components/SideMenu';
-import { ApiError, AssignmentStatus, deleteEvent, fetchEvent, saveAssignments, saveEvent } from '../api/events';
+import { ApiError, deleteEvent, fetchEvent, fetchStatus, ParticipantStatus, saveAssignments, saveEvent } from '../api/events';
+import { StatusTable } from '../components/StatusTable';
 import { DrawErrorKey, DrawSection } from '../components/DrawSection';
 import { CurrentDraw, hasDraw, loadDraw, NO_DRAW, sealDraw } from '../utils/draw';
 import { generatePairs } from '../utils/generatePairs';
@@ -49,9 +50,11 @@ export function OrganizerEvent() {
   const [content, setContent] = useState<EventContent | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [isTextView, setIsTextView] = useState(false);
-  const [openSection, setOpenSection] = useState<'participants' | 'details' | 'links' | 'draw'>('participants');
+  const [openSection, setOpenSection] = useState<'participants' | 'details' | 'links' | 'status' | 'draw'>('participants');
   const [draw, setDraw] = useState<CurrentDraw>(NO_DRAW);
-  const [status, setStatus] = useState<Record<string, AssignmentStatus>>({});
+  const [status, setStatus] = useState<Record<string, ParticipantStatus>>({});
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const [statusError, setStatusError] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawErrorKey, setDrawErrorKey] = useState<DrawErrorKey | null>(null);
   const [rulesParticipantId, setRulesParticipantId] = useState<string | null>(null);
@@ -101,6 +104,27 @@ export function OrganizerEvent() {
       cancelled = true;
     };
   }, [credentials]);
+
+  const refreshStatus = useCallback(async () => {
+    if (!credentials) return;
+    setIsRefreshingStatus(true);
+    setStatusError(false);
+    try {
+      setStatus(await fetchStatus(credentials.eventId, credentials.organizerToken));
+    } catch (error) {
+      console.error('Failed to refresh status:', error);
+      setStatusError(true);
+    } finally {
+      setIsRefreshingStatus(false);
+    }
+  }, [credentials]);
+
+  // The status table refreshes every time the organizer opens it.
+  useEffect(() => {
+    if (openSection === 'status' && load.kind === 'ready') {
+      void refreshStatus();
+    }
+  }, [openSection, load.kind, refreshStatus]);
 
   const save = useCallback((next: EventContent, createdAt: string) => {
     if (!credentials) return;
@@ -171,7 +195,7 @@ export function OrganizerEvent() {
       const next = await sealDraw(credentials.eventKey, content.participantTokens, receivers, draw);
       await saveAssignments(credentials.eventId, credentials.organizerToken, next.sealed);
       setDraw(next);
-      setStatus((await fetchEvent(credentials.eventId)).status ?? {});
+      setStatus(await fetchStatus(credentials.eventId, credentials.organizerToken));
     } catch (error) {
       console.error('Failed to save the draw:', error);
       setDrawErrorKey('draw.saveError');
@@ -348,6 +372,31 @@ export function OrganizerEvent() {
                     />
                   ))}
                 </div>
+              </Accordion>
+            )}
+            {Object.keys(content.participants).length > 0 && (
+              <Accordion
+                title={t('status.title')}
+                isOpen={openSection === 'status'}
+                onToggle={() => setOpenSection('status')}
+              >
+                <StatusTable
+                  rows={Object.values(content.participants).map(participant => ({
+                    id: participant.id,
+                    name: participant.name,
+                    link: buildParticipantLink(window.location.origin, {
+                      eventId: credentials.eventId,
+                      participantId: participant.id,
+                      eventKey: credentials.eventKey,
+                      participantToken: content.participantTokens[participant.id],
+                    }),
+                  }))}
+                  status={status}
+                  eventTitle={content.details.title}
+                  isRefreshing={isRefreshingStatus}
+                  hasError={statusError}
+                  onRefresh={refreshStatus}
+                />
               </Accordion>
             )}
             <Accordion
