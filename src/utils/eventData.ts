@@ -6,8 +6,17 @@ import { OrganizerCredentials } from './linkCodec';
 // What the organizer edits, in plaintext, only ever in the browser.
 export interface EventDetails {
   title: string;
+  budget: string;
+  // Exchange date as YYYY-MM-DD, or empty.
+  date: string;
+  location: string;
   notes: string;
 }
+
+// Character budgets per field, in UTF-16 code units (what <input maxLength>
+// counts). Chosen so that even the costliest characters to JSON-encode (six
+// bytes each) keep the sealed details blob under the Worker's 16 KB limit.
+export const DETAILS_LIMITS = { title: 100, budget: 50, location: 200, notes: 1500 } as const;
 
 export interface EventContent {
   details: EventDetails;
@@ -33,7 +42,7 @@ export interface SealedEvent {
   participantTokenHashes: Record<string, string>;
 }
 
-export const EMPTY_DETAILS: EventDetails = { title: '', notes: '' };
+export const EMPTY_DETAILS: EventDetails = { title: '', budget: '', date: '', location: '', notes: '' };
 
 const organizerKey = (credentials: OrganizerCredentials) =>
   deriveKey(credentials.eventKey, credentials.organizerToken, 'organizer');

@@ -41,12 +41,12 @@ const threePeople = {
 describe('legacy migration: details', () => {
   it('turns the additional instructions into the details notes, untitled', () => {
     const event = mapLegacyData({ participants: threePeople, assignments: null, instructions: '  Budget 20€, bring it Friday ' }, counter())!;
-    expect(event.details).toEqual({ title: '', notes: 'Budget 20€, bring it Friday' });
+    expect(event.details).toEqual({ title: '', budget: '', date: '', location: '', notes: 'Budget 20€, bring it Friday' });
   });
 
   it('has empty notes when there were no instructions', () => {
     const event = mapLegacyData({ participants: threePeople, assignments: null, instructions: null }, counter())!;
-    expect(event.details).toEqual({ title: '', notes: '' });
+    expect(event.details).toEqual({ title: '', budget: '', date: '', location: '', notes: '' });
   });
 });
 
@@ -115,6 +115,6 @@ describe('legacy migration: nothing to migrate', () => {
 
   it('migrates instructions alone', () => {
     const event = mapLegacyData({ participants: {}, assignments: null, instructions: 'See you Friday' })!;
-    expect(event).toEqual({ details: { title: '', notes: 'See you Friday' }, participants: {}, assignments: {} });
+    expect(event).toEqual({ details: { title: '', budget: '', date: '', location: '', notes: 'See you Friday' }, participants: {}, assignments: {} });
   });
 });

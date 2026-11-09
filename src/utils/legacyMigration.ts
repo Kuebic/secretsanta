@@ -1,6 +1,6 @@
 import { Participant, Participants, Rule } from '../types';
 import { mintParticipantId } from './eventCrypto';
-import { EventDetails } from './eventData';
+import { EMPTY_DETAILS, EventDetails } from './eventData';
 
 // The static version kept everything in three localStorage keys. Values are
 // whatever JSON.parse gave back: any shape the old app ever wrote, or junk.
@@ -90,7 +90,7 @@ export function mapLegacyData(legacy: LegacyData, mintId: () => string = mintPar
   if (Object.keys(participants).length === 0 && notes === '') {
     return null;
   }
-  return { details: { title: '', notes }, participants, assignments: readAssignments(legacy.assignments, raw, newIds) };
+  return { details: { ...EMPTY_DETAILS, notes }, participants, assignments: readAssignments(legacy.assignments, raw, newIds) };
 }
 
 // The last draw is `{ hash, pairings: [{ giver: { id, name }, receiver }] }`,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decryptBlob, deriveKey, encryptBlob, mintEvent, mintParticipantId, mintToken, openAssignment, sealAssignment } from './eventCrypto';
+import { DETAILS_LIMITS, openParticipantView, sealEvent } from './eventData';
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
@@ -77,5 +78,36 @@ describe('assignments', () => {
     const { eventKey, participantTokens } = mintEvent(['giver']);
     const sealed = await sealAssignment(eventKey, participantTokens.giver, 'receiver-id');
     await expect(decryptBlob(eventKey, sealed)).rejects.toThrow();
+  });
+});
+
+describe('details', () => {
+  // The Worker refuses any blob over 16 KB (spec: Limits).
+  const MAX_BLOB_BYTES = 16 * 1024;
+
+  it('seals and opens title, budget, date, location and notes', async () => {
+    const minted = mintEvent([]);
+    const credentials = { eventId: minted.eventId, eventKey: minted.eventKey, organizerToken: minted.organizerToken };
+    const details = { title: 'Family Christmas', budget: '20 €', date: '2026-12-24', location: 'Grandma\'s', notes: 'Wrap it.' };
+    const sealed = await sealEvent(credentials, { details, participants: {}, participantTokens: {} });
+    expect(sealed.details).not.toContain('Family');
+    expect((await openParticipantView(minted.eventKey, sealed)).details).toEqual(details);
+  });
+
+  it('details filled to every field\'s character budget, with the costliest characters to encode, stay under 16 KB', async () => {
+    const minted = mintEvent([]);
+    const credentials = { eventId: minted.eventId, eventKey: minted.eventKey, organizerToken: minted.organizerToken };
+    // A control character becomes six bytes once JSON-escaped (\u0001).
+    const fill = (n: number) => '\u0001'.repeat(n);
+    const details = {
+      title: fill(DETAILS_LIMITS.title),
+      budget: fill(DETAILS_LIMITS.budget),
+      date: '2026-12-24',
+      location: fill(DETAILS_LIMITS.location),
+      notes: fill(DETAILS_LIMITS.notes),
+    };
+    const sealed = await sealEvent(credentials, { details, participants: {}, participantTokens: {} });
+    expect(sealed.details.length).toBeLessThanOrEqual(MAX_BLOB_BYTES);
+    expect(DETAILS_LIMITS.notes).toBeGreaterThanOrEqual(1000);
   });
 });
