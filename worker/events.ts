@@ -46,6 +46,7 @@ const keys = {
   meta: (id: string) => `event:${id}:meta`,
   details: (id: string) => `event:${id}:details`,
   roster: (id: string) => `event:${id}:roster`,
+  assignment: (id: string, pid: string) => `event:${id}:p:${pid}:assignment`,
 };
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -221,6 +222,42 @@ async function getRoster(env: Env, id: string): Promise<Response> {
   return json({ roster: roster.roster, organizer: roster.organizer });
 }
 
+// One ciphertext per giver, each sealed with a key only that giver's token
+// derives (ADR 0003). A draw replaces the previous one entirely.
+async function putAssignments(request: Request, env: Env, id: string): Promise<Response> {
+  const meta = await requireEvent(env, id);
+  await authorizeOrganizer(request, meta);
+  const body = (await readJson(request)).assignments;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new HttpError(400, 'invalid_body');
+  }
+  const { roster } = await readStored(env, id);
+  const assignments: [string, string][] = [];
+  for (const [pid, value] of Object.entries(body)) {
+    if (!(pid in roster.participantTokenHashes)) {
+      throw new HttpError(400, 'invalid_body');
+    }
+    assignments.push([pid, ciphertext(value)]);
+  }
+  const drawn = new Set(assignments.map(([pid]) => pid));
+  await Promise.all([
+    ...assignments.map(([pid, value]) => put(env, keys.assignment(id, pid), value)),
+    ...Object.keys(roster.participantTokenHashes)
+      .filter(pid => !drawn.has(pid))
+      .map(pid => env.EVENTS.delete(keys.assignment(id, pid))),
+  ]);
+  return json({ ok: true });
+}
+
+async function getAssignment(env: Env, id: string, pid: string): Promise<Response> {
+  await requireEvent(env, id);
+  const assignment = await env.EVENTS.get(keys.assignment(id, pid));
+  if (assignment === null) {
+    throw new HttpError(404, 'not_found');
+  }
+  return json({ assignment });
+}
+
 // Removes everything under the event's prefix, including entries later
 // features add (wishlists, assignments).
 async function deleteEvent(request: Request, env: Env, id: string): Promise<Response> {
@@ -243,7 +280,17 @@ async function deleteEvent(request: Request, env: Env, id: string): Promise<Resp
 export async function handleEvents(request: Request, env: Env, path: string[]): Promise<Response> {
   try {
     const [id, resource, ...rest] = path;
-    if (!id || !ID.test(id) || rest.length > 0) {
+    if (!id || !ID.test(id)) {
+      throw new HttpError(404, 'not_found');
+    }
+    if (resource === 'participants' && rest.length === 2 && ID.test(rest[0])) {
+      const [pid, sub] = rest;
+      if (request.method === 'GET' && sub === 'assignment') {
+        return await getAssignment(env, id, pid);
+      }
+      throw new HttpError(404, 'not_found');
+    }
+    if (rest.length > 0) {
       throw new HttpError(404, 'not_found');
     }
     const route = `${request.method} ${resource ?? ''}`;
@@ -262,6 +309,8 @@ export async function handleEvents(request: Request, env: Env, path: string[]): 
         return await putRoster(request, env, id);
       case 'GET roster':
         return await getRoster(env, id);
+      case 'PUT assignments':
+        return await putAssignments(request, env, id);
     }
     throw new HttpError(404, 'not_found');
   } catch (error) {

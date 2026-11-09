@@ -3,6 +3,7 @@ import worker, { type Env } from './index';
 import { hashToken } from '../src/utils/base64url';
 
 const THIRTEEN_MONTHS = 396 * 24 * 60 * 60;
+const MAX_BLOB_BYTES_PLUS_ONE = 16 * 1024 + 1;
 
 interface StoredEntry {
   value: string;
@@ -294,5 +295,63 @@ describe('events API: delete', () => {
 
   it('answers 404 when deleting an unknown event', async () => {
     expect((await call('DELETE', `/api/events/${EVENT_ID}`, { token: ORGANIZER_TOKEN })).status).toBe(404);
+  });
+});
+
+describe('events API: assignments', () => {
+  const assignmentPath = (pid: string) => `/api/events/${EVENT_ID}/participants/${pid}/assignment`;
+
+  it('writes every giver\'s assignment with the organizer token and serves each one without auth', async () => {
+    await createEvent();
+    const response = await call('PUT', `/api/events/${EVENT_ID}/assignments`, {
+      token: ORGANIZER_TOKEN,
+      body: { assignments: { [P1]: blob(64, 'A'), [P2]: blob(64, 'B') } },
+    });
+    expect(response.status).toBe(200);
+    expect(await (await call('GET', assignmentPath(P1))).json()).toEqual({ assignment: blob(64, 'A') });
+    expect(await (await call('GET', assignmentPath(P2))).json()).toEqual({ assignment: blob(64, 'B') });
+    expect(kv.store.get(`event:${EVENT_ID}:p:${P1}:assignment`)!.expirationTtl).toBe(THIRTEEN_MONTHS);
+  });
+
+  it('answers 404 for a giver with no assignment yet', async () => {
+    await createEvent();
+    expect((await call('GET', assignmentPath(P1))).status).toBe(404);
+  });
+
+  it('refuses assignment writes with a wrong or missing token', async () => {
+    await createEvent();
+    const body = { assignments: { [P1]: blob(64, 'A') } };
+    expect((await call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: OTHER_TOKEN, body })).status).toBe(403);
+    expect((await call('PUT', `/api/events/${EVENT_ID}/assignments`, { body })).status).toBe(401);
+    expect((await call('GET', assignmentPath(P1))).status).toBe(404);
+  });
+
+  it('refuses givers outside the roster and blobs that are not ciphertext', async () => {
+    await createEvent();
+    const stranger = 'p3p3p3p3p3p3p3p3p3p3p3';
+    for (const assignments of [{ [stranger]: blob() }, { [P1]: 'not ciphertext' }, { [P1]: blob(MAX_BLOB_BYTES_PLUS_ONE) }]) {
+      const response = await call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments } });
+      expect(response.status).toBeGreaterThanOrEqual(400);
+    }
+    expect((await call('GET', assignmentPath(P1))).status).toBe(404);
+  });
+
+  it('replaces the whole draw: a giver left out of a new draw loses the old assignment', async () => {
+    await createEvent();
+    const put = (assignments: Record<string, string>) =>
+      call('PUT', `/api/events/${EVENT_ID}/assignments`, { token: ORGANIZER_TOKEN, body: { assignments } });
+    await put({ [P1]: blob(64, 'A'), [P2]: blob(64, 'B') });
+    await put({ [P1]: blob(64, 'C') });
+    expect(await (await call('GET', assignmentPath(P1))).json()).toEqual({ assignment: blob(64, 'C') });
+    expect((await call('GET', assignmentPath(P2))).status).toBe(404);
+  });
+
+  it('answers 404 for assignments of an unknown event', async () => {
+    const response = await call('PUT', `/api/events/${EVENT_ID}/assignments`, {
+      token: ORGANIZER_TOKEN,
+      body: { assignments: { [P1]: blob() } },
+    });
+    expect(response.status).toBe(404);
+    expect((await call('GET', assignmentPath(P1))).status).toBe(404);
   });
 });
