@@ -88,10 +88,16 @@ export async function openEvent(
 export interface ParticipantView {
   details: EventDetails;
   names: Record<string, string>;
+  // Organizer's notes, by participant ID, for the giver to see.
+  notes: Record<string, string>;
 }
 
 export async function openParticipantView(eventKey: string, sealed: { details: string; roster: string }): Promise<ParticipantView> {
   const details = { ...EMPTY_DETAILS, ...JSON.parse(await decryptBlob(eventKey, sealed.details)) } as EventDetails;
   const roster = JSON.parse(await decryptBlob(eventKey, sealed.roster)) as RosterPlaintext;
-  return { details, names: Object.fromEntries(Object.entries(roster).map(([id, { name }]) => [id, name])) };
+  return {
+    details,
+    names: Object.fromEntries(Object.entries(roster).map(([id, { name }]) => [id, name])),
+    notes: Object.fromEntries(Object.entries(roster).flatMap(([id, { note }]) => note ? [[id, note]] : [])),
+  };
 }

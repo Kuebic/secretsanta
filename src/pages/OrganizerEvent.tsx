@@ -14,7 +14,10 @@ import { PostCard } from '../components/PostCard';
 import { PreviousDrawModal } from '../components/PreviousDrawModal';
 import { RulesModal } from '../components/RulesModal';
 import { MenuItem } from '../components/SideMenu';
-import { ApiError, deleteEvent, fetchEvent, saveEvent } from '../api/events';
+import { ApiError, AssignmentStatus, deleteEvent, fetchEvent, saveAssignments, saveEvent } from '../api/events';
+import { DrawErrorKey, DrawSection } from '../components/DrawSection';
+import { CurrentDraw, hasDraw, loadDraw, NO_DRAW, sealDraw } from '../utils/draw';
+import { generatePairs } from '../utils/generatePairs';
 import { Participants } from '../types';
 import { EventContent, EventDetails, openEvent, sealEvent, withParticipantTokens } from '../utils/eventData';
 import { buildOrganizerLink, buildParticipantLink, OrganizerCredentials, parseOrganizerFragment } from '../utils/linkCodec';
@@ -45,7 +48,11 @@ export function OrganizerEvent() {
   const [content, setContent] = useState<EventContent | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [isTextView, setIsTextView] = useState(false);
-  const [openSection, setOpenSection] = useState<'participants' | 'details' | 'links'>('participants');
+  const [openSection, setOpenSection] = useState<'participants' | 'details' | 'links' | 'draw'>('participants');
+  const [draw, setDraw] = useState<CurrentDraw>(NO_DRAW);
+  const [status, setStatus] = useState<Record<string, AssignmentStatus>>({});
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawErrorKey, setDrawErrorKey] = useState<DrawErrorKey | null>(null);
   const [rulesParticipantId, setRulesParticipantId] = useState<string | null>(null);
   const [isPreviousDrawOpen, setIsPreviousDrawOpen] = useState(false);
 
@@ -77,9 +84,17 @@ export function OrganizerEvent() {
       }
       if (cancelled) return;
       setContent(opened);
+      setStatus(stored.status ?? {});
       setLoad({ kind: 'ready', createdAt: stored.createdAt });
       // Opening an organizer link on a fresh browser adds the event to its home page.
       rememberLocally(credentials, opened.details.title, stored.createdAt);
+      try {
+        const current = await loadDraw(credentials.eventId, credentials.eventKey, opened.participantTokens, stored.status ?? {});
+        if (!cancelled) setDraw(current);
+      } catch (error) {
+        console.error('Failed to read the current draw:', error);
+        if (!cancelled) setDrawErrorKey('draw.loadError');
+      }
     })();
     return () => {
       cancelled = true;
@@ -129,6 +144,40 @@ export function OrganizerEvent() {
   }));
 
   const setDetails = (details: EventDetails) => edit(current => ({ ...current, details }));
+
+  // Assignments are sealed per giver and written in one request; a giver whose
+  // receiver is unchanged gets the same ciphertext back, so the Worker keeps
+  // their opened state and they see no "this changed" banner.
+  const handleDraw = async () => {
+    if (!credentials || !content || isDrawing) return;
+    setDrawErrorKey(null);
+    if (Object.keys(content.participants).length < 2) {
+      setDrawErrorKey('errors.needMoreParticipants');
+      return;
+    }
+    const pairs = generatePairs(content.participants);
+    if (!pairs) {
+      setDrawErrorKey('errors.invalidPairs');
+      return;
+    }
+    const openedCount = Object.keys(content.participants).filter(id => status[id]?.openedAt).length;
+    if (hasDraw(draw) && openedCount > 0 && !window.confirm(t('draw.redrawConfirm', { count: openedCount }))) {
+      return;
+    }
+    const receivers = Object.fromEntries(pairs.pairings.map(({ giver, receiver }) => [giver.id, receiver.id]));
+    setIsDrawing(true);
+    try {
+      const next = await sealDraw(credentials.eventKey, content.participantTokens, receivers, draw);
+      await saveAssignments(credentials.eventId, credentials.organizerToken, next.sealed);
+      setDraw(next);
+      setStatus((await fetchEvent(credentials.eventId)).status ?? {});
+    } catch (error) {
+      console.error('Failed to save the draw:', error);
+      setDrawErrorKey('draw.saveError');
+    } finally {
+      setIsDrawing(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!credentials || !window.confirm(t('organizer.deleteConfirm'))) return;
@@ -301,6 +350,21 @@ export function OrganizerEvent() {
                 </div>
               </Accordion>
             )}
+            <Accordion
+              title={t('draw.title')}
+              isOpen={openSection === 'draw'}
+              onToggle={() => setOpenSection('draw')}
+            >
+              <DrawSection
+                participants={content.participants}
+                draw={draw}
+                status={status}
+                isDrawing={isDrawing}
+                canDraw={saveState === 'saved'}
+                errorKey={drawErrorKey}
+                onDraw={handleDraw}
+              />
+            </Accordion>
           </AccordionContainer>
         </div>
       </Layout>

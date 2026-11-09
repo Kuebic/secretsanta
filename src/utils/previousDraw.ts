@@ -1,6 +1,6 @@
 import { fetchAssignment, fetchEvent } from '../api/events';
 import { PreviousDraw } from './avoidPreviousDraw';
-import { decryptBlob, deriveKey } from './eventCrypto';
+import { openAssignment } from './eventCrypto';
 import { openEvent } from './eventData';
 import { OrganizerCredentials } from './linkCodec';
 
@@ -12,10 +12,9 @@ export async function loadPreviousDraw(credentials: OrganizerCredentials): Promi
   const roster = Object.fromEntries(Object.values(participants).map(({ id, name }) => [id, { name }]));
   const assignments: Record<string, string> = {};
   await Promise.all(Object.keys(participants).map(async giverId => {
-    const sealed = await fetchAssignment(credentials.eventId, giverId);
-    if (sealed === null) return;
-    const key = await deriveKey(credentials.eventKey, participantTokens[giverId], 'assignment');
-    assignments[giverId] = await decryptBlob(key, sealed);
+    const stored = await fetchAssignment(credentials.eventId, giverId);
+    if (stored === null) return;
+    assignments[giverId] = await openAssignment(credentials.eventKey, participantTokens[giverId], stored.assignment);
   }));
   return { roster, assignments };
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { deleteEvent, saveAssignments, saveEvent } from '../api/events';
-import { deriveKey, encryptBlob, mintEvent } from './eventCrypto';
+import { mintEvent, sealAssignment } from './eventCrypto';
 import { sealEvent } from './eventData';
 import { mapLegacyData } from './legacyMigration';
 import { readLocalEvents, upsertLocalEvent } from './localEvents';
@@ -58,8 +58,7 @@ async function migrate(): Promise<void> {
     if (assignments.length > 0) {
       const sealedAssignments: Record<string, string> = {};
       for (const [giverId, receiverId] of assignments) {
-        const key = await deriveKey(minted.eventKey, minted.participantTokens[giverId], 'assignment');
-        sealedAssignments[giverId] = await encryptBlob(key, receiverId);
+        sealedAssignments[giverId] = await sealAssignment(minted.eventKey, minted.participantTokens[giverId], receiverId);
       }
       await saveAssignments(minted.eventId, minted.organizerToken, sealedAssignments);
     }

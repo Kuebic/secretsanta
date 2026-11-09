@@ -9,12 +9,23 @@ export class ApiError extends Error {
   }
 }
 
+// Plaintext timing the Worker keeps per participant (ADR 0002).
+export interface AssignmentStatus {
+  assignedAt?: string;
+  openedAt?: string;
+}
+
 export interface StoredEvent {
   details: string;
   roster: string;
   organizer: string;
   createdAt: string;
   updatedAt: string;
+  status: Record<string, AssignmentStatus>;
+}
+
+export interface StoredAssignment extends AssignmentStatus {
+  assignment: string;
 }
 
 async function request(method: string, eventId: string, token?: string, body?: unknown, resource = ''): Promise<Response> {
@@ -49,9 +60,9 @@ export async function deleteEvent(eventId: string, organizerToken: string): Prom
   await request('DELETE', eventId, organizerToken);
 }
 
-// A giver's encrypted assignment, or null when the event has no draw for them
-// yet. Response shape `{ assignment }` per the spec's API list (ticket 08).
-export async function fetchAssignment(eventId: string, participantId: string): Promise<string | null> {
+// A giver's encrypted assignment and its timing, or null when the event has
+// no draw for them yet.
+export async function fetchAssignment(eventId: string, participantId: string): Promise<StoredAssignment | null> {
   const response = await fetch(
     `/api/events/${encodeURIComponent(eventId)}/participants/${encodeURIComponent(participantId)}/assignment`,
   );
@@ -61,6 +72,12 @@ export async function fetchAssignment(eventId: string, participantId: string): P
   if (!response.ok) {
     throw new ApiError(response.status);
   }
-  const { assignment } = await response.json() as { assignment: string };
-  return assignment;
+  return await response.json() as StoredAssignment;
+}
+
+// Records that the giver opened their assignment, with their own participant token.
+export async function markOpened(eventId: string, participantId: string, participantToken: string): Promise<string> {
+  const response = await request('POST', eventId, participantToken, undefined, `/participants/${encodeURIComponent(participantId)}/opened`);
+  const { openedAt } = await response.json() as { openedAt: string };
+  return openedAt;
 }
