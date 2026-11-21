@@ -1,5 +1,5 @@
 import { Participant } from '../types';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { parseParticipantsText, ParseError, formatParticipantText } from '../utils/parseParticipants';
 import { useTranslation } from 'react-i18next';
 
@@ -13,12 +13,17 @@ export function ParticipantsTextView({ participants, onChangeParticipants }: Par
 
   const [text, setText] = useState(() => formatParticipantText(participants));
   const [error, setError] = useState<ParseError | null>(null);
+  // Every participant this view has seen, by ID. A line that disappears and
+  // comes back (cut, then paste) gets its ID back instead of a fresh one, so
+  // the organizer page can hand it the same token and the same assignment.
+  const remembered = useRef<Record<string, Participant>>(participants);
 
   const handleChange = (newText: string) => {
     setText(newText);
     
-    const result = parseParticipantsText(newText, participants);
+    const result = parseParticipantsText(newText, { ...remembered.current, ...participants });
     if (result.ok) {
+      remembered.current = { ...remembered.current, ...result.participants };
       setError(null);
       onChangeParticipants(result.participants);
     } else {

@@ -36,10 +36,18 @@ export function formatParticipantText(participants: Record<string, Participant>)
 
 const PAREN = /[!=(]/;
 
+// `existingParticipants` is keyed by ID, like everywhere else; a line whose
+// name matches one of them keeps that ID, so tokens, rules and the current
+// draw survive an edit. When two existing participants share a name, the one
+// listed last wins, so callers put the current roster after any remembered one.
 export function parseParticipantsText(input: string, existingParticipants?: Record<string, Participant>): ParseResult {
   const lines = input.split('\n').map(line => line.trim());
   const result: Record<string, Participant> = {};
   const nameToId: Record<string, string> = {};
+  const existingIdByName: Record<string, string> = {};
+  for (const participant of Object.values(existingParticipants ?? {})) {
+    existingIdByName[participant.name] = participant.id;
+  }
 
   const parsedLines: {
     line: number,
@@ -102,7 +110,7 @@ export function parseParticipantsText(input: string, existingParticipants?: Reco
       };
     }
 
-    const id = existingParticipants?.[name]?.id ?? mintParticipantId();
+    const id = existingIdByName[name] ?? mintParticipantId();
     nameToId[name] = id;
     result[id] = { id, name, hint, rules: [] };
   }

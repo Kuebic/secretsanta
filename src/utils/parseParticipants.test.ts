@@ -117,8 +117,9 @@ describe('parseParticipantsText', () => {
   });
 
   it('should preserve existing IDs when provided', () => {
+    // Keyed by ID, as the organizer page passes them.
     const existingParticipants: Record<string, Participant> = {
-      'Alice': {
+      'existing-alice-id': {
         id: 'existing-alice-id',
         name: 'Alice',
         rules: []
@@ -136,6 +137,19 @@ describe('parseParticipantsText', () => {
 
     const alice = Object.values(result.participants).find(p => p.name === 'Alice');
     expect(alice?.id).toBe('existing-alice-id');
+    expect(result.participants['existing-alice-id']?.name).toBe('Alice');
+  });
+
+  it('keeps every ID when the same text is parsed again', () => {
+    const first = parseParticipantsText('Alice !Bob\nBob (likes tea)\nCharlie =Alice');
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    const again = parseParticipantsText(formatParticipantText(first.participants), first.participants);
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+
+    expect(again.participants).toEqual(first.participants);
   });
 });
 

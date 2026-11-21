@@ -162,11 +162,16 @@ export function OrganizerEvent() {
     setSaveState('pending');
   };
 
-  const setParticipants = (participants: Participants) => edit(current => ({
-    ...current,
-    participants,
-    participantTokens: withParticipantTokens(participants, current.participantTokens),
-  }));
+  // Tokens of participants removed during this visit. A participant who comes
+  // back under the same ID (a cut and paste in the text view) gets their token
+  // back, so the link they already received keeps working.
+  const retiredTokens = useRef<Record<string, string>>({});
+
+  const setParticipants = (participants: Participants) => edit(current => {
+    const participantTokens = withParticipantTokens(participants, { ...retiredTokens.current, ...current.participantTokens });
+    retiredTokens.current = { ...retiredTokens.current, ...current.participantTokens };
+    return { ...current, participants, participantTokens };
+  });
 
   const setDetails = (details: EventDetails) => edit(current => ({ ...current, details }));
 
