@@ -73,7 +73,7 @@ _Avoid_: Last year, history
 ### Gifting
 
 **Wishlist**:
-What a participant tells their giver they would like: a list of items plus free-text notes.
+What a participant tells their giver they would like: a list of items plus free-text notes. A participant has **filled in** their wishlist when it holds at least one item or some notes; an emptied wishlist is no longer filled in.
 _Avoid_: Preferences, registry, suggestions
 
 **Wishlist item**:

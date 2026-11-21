@@ -16,6 +16,20 @@ export interface Wishlist {
 
 export const EMPTY_WISHLIST: Wishlist = { items: [], notes: '' };
 
+// What gets sealed: text trimmed, blank items dropped. The editor keeps its
+// own copy as typed, so a blank row just added stays put.
+export function cleanWishlist(wishlist: Wishlist): Wishlist {
+  return {
+    items: wishlist.items
+      .map(({ text, url }) => ({ text: text.trim(), url: url.trim() }))
+      .filter(({ text, url }) => text || url),
+    notes: wishlist.notes.trim(),
+  };
+}
+
+// Filled in means at least one item or some notes (GLOSSARY.md).
+export const isFilledIn = (cleaned: Wishlist) => cleaned.items.length > 0 || cleaned.notes !== '';
+
 // A sealed blob is base64url of iv (12) || ciphertext || tag (16), so the
 // JSON plaintext gets 3/4 of the Worker's blob limit minus 28 bytes.
 const MAX_PLAINTEXT_BYTES = (MAX_BLOB_BYTES * 3) / 4 - 12 - 16;

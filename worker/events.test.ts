@@ -530,6 +530,30 @@ describe('events API: wishlists', () => {
   it('answers 404 for wishlists of an unknown event', async () => {
     expect((await save(P1, 't1', blob(64, 'W'))).status).toBe(404);
     expect((await call('GET', wishlistPath(P1))).status).toBe(404);
+    expect((await call('DELETE', wishlistPath(P1), { token: 't1' })).status).toBe(404);
+  });
+
+  it('deletes a participant\'s wishlist with their own token, so they are no longer listed as filled in', async () => {
+    await createEvent();
+    await save(P1, 't1', blob(64, 'W'));
+    expect((await call('DELETE', wishlistPath(P1), { token: 't1' })).status).toBe(204);
+    expect((await call('GET', wishlistPath(P1))).status).toBe(404);
+    const { status } = await (await call('GET', `/api/events/${EVENT_ID}`)).json();
+    expect(status[P1].wishlistUpdatedAt).toBeUndefined();
+  });
+
+  it('answers 204 when deleting a wishlist that is not there, so a retried delete succeeds', async () => {
+    await createEvent();
+    expect((await call('DELETE', wishlistPath(P1), { token: 't1' })).status).toBe(204);
+  });
+
+  it('refuses a wishlist delete with another participant\'s token, the organizer token, or no token', async () => {
+    await createEvent();
+    await save(P1, 't1', blob(64, 'W'));
+    expect((await call('DELETE', wishlistPath(P1), { token: 't2' })).status).toBe(403);
+    expect((await call('DELETE', wishlistPath(P1), { token: ORGANIZER_TOKEN })).status).toBe(403);
+    expect((await call('DELETE', wishlistPath(P1))).status).toBe(401);
+    expect((await (await call('GET', wishlistPath(P1))).json()).wishlist).toBe(blob(64, 'W'));
   });
 });
 

@@ -27,7 +27,8 @@ export interface StoredAssignment extends AssignmentStatus {
   assignment: string;
 }
 
-async function request(method: string, eventId: string, token?: string, body?: unknown, resource = ''): Promise<Response> {
+// keepalive lets a participant's last save finish when the page is hidden or closed.
+async function request(method: string, eventId: string, token?: string, body?: unknown, resource = '', keepalive = false): Promise<Response> {
   const headers: Record<string, string> = {};
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
@@ -35,6 +36,7 @@ async function request(method: string, eventId: string, token?: string, body?: u
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
+    keepalive,
   });
   if (!response.ok) {
     throw new ApiError(response.status);
@@ -103,7 +105,12 @@ export function fetchWishlist(eventId: string, participantId: string): Promise<S
 
 // Saves the participant's own sealed wishlist with their participant token.
 export async function saveWishlist(eventId: string, participantId: string, participantToken: string, wishlist: string): Promise<string> {
-  const response = await request('PUT', eventId, participantToken, { wishlist }, participantResource(participantId, 'wishlist'));
+  const response = await request('PUT', eventId, participantToken, { wishlist }, participantResource(participantId, 'wishlist'), true);
   const { wishlistUpdatedAt } = await response.json() as { wishlistUpdatedAt: string };
   return wishlistUpdatedAt;
+}
+
+// Removes the participant's own wishlist, so they are no longer filled in.
+export async function deleteWishlist(eventId: string, participantId: string, participantToken: string): Promise<void> {
+  await request('DELETE', eventId, participantToken, undefined, participantResource(participantId, 'wishlist'), true);
 }

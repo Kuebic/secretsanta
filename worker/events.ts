@@ -139,6 +139,14 @@ async function authorizeToken(request: Request, expectedHash: string | undefined
 
 const authorizeOrganizer = (request: Request, meta: Meta) => authorizeToken(request, meta.organizerTokenHash);
 
+// A participant writing their own entries, with their own participant token.
+async function authorizeParticipant(request: Request, env: Env, id: string, pid: string): Promise<Meta> {
+  const meta = await requireEvent(env, id);
+  const { roster } = await readStored(env, id);
+  await authorizeToken(request, roster.participantTokenHashes[pid]);
+  return meta;
+}
+
 async function requireEvent(env: Env, id: string): Promise<Meta> {
   const meta = await readMeta(env, id);
   if (!meta) {
@@ -332,9 +340,7 @@ async function getAssignment(env: Env, id: string, pid: string): Promise<Respons
 // their assignment. The entry keeps the event's expiry: a participant write
 // does not refresh the TTL.
 async function postOpened(request: Request, env: Env, id: string, pid: string): Promise<Response> {
-  const meta = await requireEvent(env, id);
-  const { roster } = await readStored(env, id);
-  await authorizeToken(request, roster.participantTokenHashes[pid]);
+  const meta = await authorizeParticipant(request, env, id, pid);
   const { value, metadata } = await env.EVENTS.getWithMetadata(keys.assignment(id, pid));
   if (value === null) {
     throw new HttpError(404, 'not_found');
@@ -351,9 +357,7 @@ async function postOpened(request: Request, env: Env, id: string, pid: string): 
 // browser, using their participant token. The server keeps the ciphertext
 // and when it last changed (ADR 0002).
 async function putWishlist(request: Request, env: Env, id: string, pid: string): Promise<Response> {
-  const meta = await requireEvent(env, id);
-  const { roster } = await readStored(env, id);
-  await authorizeToken(request, roster.participantTokenHashes[pid]);
+  const meta = await authorizeParticipant(request, env, id, pid);
   const wishlist = ciphertext((await readJson(request)).wishlist);
   const wishlistUpdatedAt = new Date().toISOString();
   await env.EVENTS.put(keys.wishlist(id, pid), wishlist, {
@@ -361,6 +365,15 @@ async function putWishlist(request: Request, env: Env, id: string, pid: string):
     metadata: { wishlistUpdatedAt },
   });
   return json({ wishlistUpdatedAt });
+}
+
+// A participant empties their wishlist: the entry goes, so the status no
+// longer lists them as filled in. Deleting nothing is not an error, so a
+// retried delete succeeds.
+async function deleteWishlist(request: Request, env: Env, id: string, pid: string): Promise<Response> {
+  await authorizeParticipant(request, env, id, pid);
+  await env.EVENTS.delete(keys.wishlist(id, pid));
+  return new Response(null, { status: 204 });
 }
 
 async function getWishlist(env: Env, id: string, pid: string): Promise<Response> {
@@ -401,6 +414,9 @@ export async function handleEvents(request: Request, env: Env, path: string[]): 
       }
       if (request.method === 'PUT' && sub === 'wishlist') {
         return await putWishlist(request, env, id, pid);
+      }
+      if (request.method === 'DELETE' && sub === 'wishlist') {
+        return await deleteWishlist(request, env, id, pid);
       }
       if (request.method === 'POST' && sub === 'opened') {
         return await postOpened(request, env, id, pid);
